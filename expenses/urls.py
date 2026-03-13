@@ -6,7 +6,11 @@ from .views import (
     EmployeeViewSet,
     ExpenseLineItemViewSet,
     ExpenseRecordViewSet,
-    login_api,  # make sure login_api exists in views.py
+    login_api,
+    dashboard_api,
+    dashboard_employee,
+    dashboard_expenses,
+    dashboard_expense_list,                # now exists in views.py
 )
 
 # Create a router and register all viewsets
@@ -19,6 +23,10 @@ router.register(r"emails", EmailMessageViewSet, basename="email")
 
 # Define URL patterns
 urlpatterns = [
-    path("login/", login_api, name="login_api"),  # login API
-    path("", include(router.urls)),               # all viewset APIs
+    path("login/", login_api, name="login_api"),  # login API endpoint
+    path("dashboard/", dashboard_api, name="dashboard_api"),
+    path("dashboard/employee/", dashboard_employee, name="dashboard_employee"),
+    path("dashboard/expenses/", dashboard_expenses, name="dashboard_expenses"),
+    path("dashboard/expenselist/", dashboard_expense_list, name="dashboard_expense_list"),
+    path("", include(router.urls)),               # all other viewsets
 ]
