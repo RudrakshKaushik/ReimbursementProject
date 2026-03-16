@@ -10,6 +10,7 @@ from .views import (
     dashboard_api,
     dashboard_employee,
     dashboard_expenses,
+    gemini_api,
     dashboard_expense_list,                # now exists in views.py
 )
 
@@ -28,5 +29,6 @@ urlpatterns = [
     path("dashboard/employee/", dashboard_employee, name="dashboard_employee"),
     path("dashboard/expenses/", dashboard_expenses, name="dashboard_expenses"),
     path("dashboard/expenselist/", dashboard_expense_list, name="dashboard_expense_list"),
+    path("gemini/", gemini_api, name="gemini_api"),
     path("", include(router.urls)),               # all other viewsets
 ]

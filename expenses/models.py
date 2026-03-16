@@ -92,6 +92,9 @@ class Attachment(models.Model):
     filename = models.CharField(max_length=255)
     content_type = models.CharField(max_length=100, blank=True)
     size = models.PositiveIntegerField(default=0)
+
+    file_data = models.BinaryField(null=True, blank=True)  # NEW binary field
+
     expense_record = models.ForeignKey(
         ExpenseRecord,
         null=True,
