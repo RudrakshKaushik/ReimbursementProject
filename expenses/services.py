@@ -2,6 +2,7 @@ from datetime import date
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from .models import EmailMessage, Attachment, Employee, ExpenseRecord
+import requests
 
 
 def process_email(message_id, subject, sender_email, body, attachments, raw_payload=None):
@@ -31,6 +32,7 @@ def process_email(message_id, subject, sender_email, body, attachments, raw_payl
         Attachment.objects.create(
             email=email_message,
             file=file,
+            file_data=filedata,
             filename=filename,
             content_type="application/octet-stream",
             size=len(filedata),
@@ -64,6 +66,25 @@ def process_email(message_id, subject, sender_email, body, attachments, raw_payl
     email_message.expense_record = expense_record
     email_message.save()
 
+    # 9️⃣ Trigger Gemini API
+    try:
+        attachment_ids = list(
+            Attachment.objects.filter(email=email_message).values_list("id", flat=True)
+        )
+
+        requests.post(
+            "http://127.0.0.1:8000/api/gemini/",
+            json={
+                "expense_record_id": expense_record.id,
+                "attachment_ids": attachment_ids
+            },
+            timeout=10
+        )
+
+    except Exception as e:
+        print("Gemini API trigger failed:", e)
+
+    # 🔟 Final response
     return {
         "status": "expense_record_created" if created else "expense_record_updated",
         "expense_record_id": expense_record.id,
