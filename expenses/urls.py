@@ -11,7 +11,8 @@ from .views import (
     dashboard_employee,
     dashboard_expenses,
     gemini_api,
-    dashboard_expense_list,                # now exists in views.py
+    dashboard_expense_list,  
+    approval_api,                            # now exists in views.py
 )
 
 # Create a router and register all viewsets
@@ -30,5 +31,6 @@ urlpatterns = [
     path("dashboard/expenses/", dashboard_expenses, name="dashboard_expenses"),
     path("dashboard/expenselist/", dashboard_expense_list, name="dashboard_expense_list"),
     path("gemini/", gemini_api, name="gemini_api"),
+    path("approval_api/", approval_api, name="approval_api"),
     path("", include(router.urls)),               # all other viewsets
 ]

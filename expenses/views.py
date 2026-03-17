@@ -3,6 +3,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
+from django.contrib.auth import login
 
 from .models import (
     ApprovalRule,
@@ -129,6 +130,7 @@ def login_api(request):
     user = authenticate(username=email, password=password)
 
     if user is not None:
+        login(request, user)
         return Response({
             "success": True,
             "message": "Login successful",
@@ -286,38 +288,33 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Attachment, ExpenseRecord, ExpenseLineItem
 
 
-import base64
-import json
-import requests
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from .models import Attachment, ExpenseRecord
-
 
 import json
 import base64
 import requests
-from django.http import JsonResponse
-from .models import ExpenseRecord, Attachment, ExpenseLineItem
 
-
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
 def gemini_api(request):
 
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required"}, status=400)
+    try:
+        data = request.data
 
-    data = json.loads(request.body)
+        expense_record_id = data.get("expense_record_id")
+        attachment_id = data.get("attachment_id")
 
-    expense_record_id = data.get("expense_record_id")
-    attachment_id = data.get("attachment_id")
+        if not expense_record_id or not attachment_id:
+            return Response(
+                {"error": "Missing required fields"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-    expense_record = ExpenseRecord.objects.get(id=expense_record_id)
-    attachment = Attachment.objects.get(id=attachment_id)
+        expense_record = ExpenseRecord.objects.get(id=expense_record_id)
+        attachment = Attachment.objects.get(id=attachment_id)
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
 
-    prompt = """
+        prompt = """
 The uploaded image may contain multiple receipts. Some receipts may be duplicate copies of the SAME transaction.
 
 Your goal is to count UNIQUE bills only.
@@ -344,72 +341,167 @@ Return ONLY valid JSON.
 }
 """
 
-    # convert binary → base64
-    base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
-    base64_data = base64_data.replace("\n", "").replace("\r", "")
+        # convert binary → base64
+        base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
+        base64_data = base64_data.replace("\n", "").replace("\r", "")
 
-    mime_type = attachment.file_type or "image/jpeg"
+        mime_type = attachment.file_type or "image/jpeg"
 
-    request_body = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "inline_data": {
-                            "mime_type": mime_type,
-                            "data": base64_data
+        request_body = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": base64_data
+                            }
+                        },
+                        {
+                            "text": prompt
                         }
-                    },
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
-        ]
-    }
+                    ]
+                }
+            ]
+        }
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": "YOUR_GEMINI_API_KEY"
-    }
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": ""
+        }
 
-    response = requests.post(
-        url,
-        headers=headers,
-        data=json.dumps(request_body)
-    )
-
-    response_json = response.json()
-
-    try:
-        # Gemini text extract
-        gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-
-        # JSON parse
-        parsed_data = json.loads(gemini_text)
-
-        bill_count = parsed_data.get("count", 0)
-
-    except Exception as e:
-        return JsonResponse({
-            "error": "Failed to parse Gemini response",
-            "details": str(e),
-            "raw_response": response_json
-        })
-
-    # Create Expense Line Items
-    created_items = []
-
-    for i in range(bill_count):
-        line_item = ExpenseLineItem.objects.create(
-            expense_record=expense_record,
-            attachment=attachment,
-            bill_number=i + 1
+        response = requests.post(
+            url,
+            headers=headers,
+            data=json.dumps(request_body)
         )
 
-        created_items.append(line_item.id)
+        response_json = response.json()
 
-    return JsonResponse({
-        "unique_bill_count": bill_count,
-        "line_items_created": created_items
-    })
+        try:
+            gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
+            parsed_data = json.loads(gemini_text)
+            bill_count = parsed_data.get("count", 0)
+
+        except Exception as e:
+            return Response({
+                "error": "Failed to parse Gemini response",
+                "details": str(e),
+                "raw_response": response_json
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Create Expense Line Items
+        created_items = []
+
+        for i in range(bill_count):
+            line_item = ExpenseLineItem.objects.create(
+                expense_record=expense_record,
+                attachment=attachment,
+                bill_number=i + 1
+            )
+            created_items.append(line_item.id)
+
+        return Response({
+            "unique_bill_count": bill_count,
+            "line_items_created": created_items
+        }, status=status.HTTP_200_OK)
+
+    except ExpenseRecord.DoesNotExist:
+        return Response({"error": "ExpenseRecord not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Attachment.DoesNotExist:
+        return Response({"error": "Attachment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({
+            "error": "Something went wrong",
+            "details": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def approval_api(request):
+
+    expense_record_id = request.data.get("expense_record_id")
+
+    if not expense_record_id:
+        return Response(
+            {"error": "expense_record_id is required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        expense_record = ExpenseRecord.objects.get(id=expense_record_id)
+
+        # Get all line items
+        line_items = ExpenseLineItem.objects.filter(
+            expense_record=expense_record
+        )
+
+        if not line_items.exists():
+            return Response(
+                {"error": "No line items found"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get policy (simple version: first policy)
+        policy = Policy.objects.first()
+
+        if not policy:
+            return Response(
+                {"error": "Policy not configured"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        violations = []
+        total_amount = 0
+
+        # 🔍 Validate each line item
+        for item in line_items:
+            total_amount += item.amount
+
+            if item.amount > policy.max_amount:
+                violations.append({
+                    "line_item_id": item.id,
+                    "amount": float(item.amount),
+                    "reason": "Exceeds max allowed per item"
+                })
+
+        # 🔍 Decide status
+        if violations:
+            approval_status = "REJECTED"
+        else:
+            approval_status = "APPROVED"
+
+        # Update or create approval record
+        approval, created = Approval.objects.get_or_create(
+            expense_record=expense_record,
+            approver=request.user
+        )
+
+        approval.status = approval_status
+        approval.comments = "Auto-evaluated by policy engine"
+        approval.save()
+
+        return Response({
+            "expense_record_id": expense_record.id,
+            "status": approval_status,
+            "total_amount": float(total_amount),
+            "violations": violations
+        }, status=status.HTTP_200_OK)
+
+    except ExpenseRecord.DoesNotExist:
+        return Response(
+            {"error": "ExpenseRecord not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    except Exception as e:
+        return Response(
+            {
+                "error": "Something went wrong",
+                "details": str(e)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )    

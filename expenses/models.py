@@ -144,4 +144,43 @@ class ApprovalRule(models.Model):
 
     def __str__(self) -> str:
         return self.name
+    
+
+from django.db import models
+from django.contrib.auth.models import User
+
+class Approval(models.Model):
+
+    STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("APPROVED", "Approved"),
+        ("REJECTED", "Rejected"),
+    ]
+
+    expense_record = models.ForeignKey(
+        ExpenseRecord,
+        on_delete=models.CASCADE,
+        related_name="approvals"
+    )
+
+    approver = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="approvals_to_review"
+    )
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="PENDING"
+    )
+
+    comments = models.TextField(blank=True, null=True)
+
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.expense_record.id} - {self.approver.username} - {self.status}"    
 
