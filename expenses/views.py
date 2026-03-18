@@ -293,7 +293,10 @@ import json
 import base64
 import requests
 
-@api_view(["GET"])
+from datetime import datetime, date
+from decimal import Decimal
+
+@api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def gemini_api(request):
 
@@ -314,38 +317,76 @@ def gemini_api(request):
 
         url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
 
-        prompt = """
-The uploaded image may contain multiple receipts. Some receipts may be duplicate copies of the SAME transaction.
+        PROMPT = """
+You are an expert expense document analyzer.
 
-Your goal is to count UNIQUE bills only.
+The uploaded image or document is a bill or receipt. The image can contain multiple or duplicate bills, so read details carefully.
 
-Rules:
+Each bill belongs to exactly one of these categories:
+- Food and Beverages
+- Hotel/Accommodation
+- Flight Travel
+- Office supplies
+- Medical expenses
+- Training cost
+- Petrol/Diesel bill
+- Gas fuel
+- Parking charges
+- Car rental
+- Train Travel
+- Courier charges
+- Relocation expenses
+- WFH setup
+- Phone and internet bill
 
-1. Carefully analyze the entire image.
-2. Identify each receipt separately.
-3. Two receipts represent the SAME bill if they share most of these fields:
-- Merchant name
-- Date and/or time
-- Total amount
-- Card digits (if visible)
-- Order items or subtotal
+If none of the above categories match, use: Miscellaneous.
 
-4. If two receipts represent the same transaction, count them as ONE bill.
-5. If receipts have different merchants, dates, or totals, count them as different bills.
-6. Ignore partial or cut-off receipts unless they clearly represent a different transaction.
+If no currency is found in the bill, use: USD.
+
+Your task:
+1. Read the document carefully.
+2. For EACH bill, extract:
+   - type (expense category)
+   - amount (total bill amount)
+   - currency (ISO-4217 code)
+   - bill_date (only date)
+   - additional_info (vendor/merchant name and any useful extra info)
 
 Return ONLY valid JSON.
 
+Strict rules:
+- Return a raw JSON object (NOT a string)
+- Do NOT wrap the output in quotes
+- Do NOT use markdown or ``` blocks
+- Do NOT include explanations or extra text
+- Do NOT escape characters unnecessarily
+- Do NOT omit any keys
+- Do NOT add extra keys
+
+If a value is NOT found:
+- string → ""
+- number → null
+- object → {}
+- array → []
+
+Return JSON strictly in this structure:
+
 {
-"count": null
+  "bills": [
+    {
+      "type": "",
+      "amount": null,
+      "currency": "",
+      "bill_date": null,
+      "additional_info": ""
+    }
+  ]
 }
 """
 
-        # convert binary → base64
+        # base64 conversion
         base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
         base64_data = base64_data.replace("\n", "").replace("\r", "")
-
-        mime_type = attachment.file_type or "image/jpeg"
 
         request_body = {
             "contents": [
@@ -353,12 +394,12 @@ Return ONLY valid JSON.
                     "parts": [
                         {
                             "inline_data": {
-                                "mime_type": mime_type,
+                                "mime_type": "image/jpeg",
                                 "data": base64_data
                             }
                         },
                         {
-                            "text": prompt
+                            "text": PROMPT
                         }
                     ]
                 }
@@ -380,8 +421,14 @@ Return ONLY valid JSON.
 
         try:
             gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
+
+            # clean JSON
+            gemini_text = gemini_text.strip().replace("```json", "").replace("```", "")
+
             parsed_data = json.loads(gemini_text)
-            bill_count = parsed_data.get("count", 0)
+
+            bills = parsed_data.get("bills", [])
+            bill_count = len(bills)
 
         except Exception as e:
             return Response({
@@ -390,14 +437,34 @@ Return ONLY valid JSON.
                 "raw_response": response_json
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Create Expense Line Items
+        # 👉 Take only first bill
+        bill = bills[0] if bills else {}
+
+        # ✅ SAFE DATE PARSE
+        bill_date = bill.get("bill_date")
+        try:
+            bill_date = datetime.strptime(bill_date, "%Y-%m-%d").date() if bill_date else date.today()
+        except:
+            bill_date = date.today()
+
+        # ✅ SAFE AMOUNT PARSE
+        amount = bill.get("amount")
+        try:
+            amount = Decimal(str(amount)) if amount is not None else Decimal("0.00")
+        except:
+            amount = Decimal("0.00")
+
         created_items = []
 
-        for i in range(bill_count):
+        for i in range(1):
             line_item = ExpenseLineItem.objects.create(
                 expense_record=expense_record,
                 attachment=attachment,
-                bill_number=i + 1
+                description=bill.get("additional_info", "")[:500],
+                date=bill_date,
+                category=bill.get("type", ""),
+                amount=amount,
+                vendor=bill.get("additional_info", "")[:255]
             )
             created_items.append(line_item.id)
 
@@ -419,7 +486,7 @@ Return ONLY valid JSON.
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
-@api_view(["GET"])
+@api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def approval_api(request):
 
