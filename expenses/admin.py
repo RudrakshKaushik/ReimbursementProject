@@ -7,9 +7,10 @@ from .models import (
     Employee,
     ExpenseLineItem,
     ExpenseRecord,
+    Approval
 )
 
-
+admin.site.register(Approval)
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     list_display = ("name", "email", "manager", "is_active")

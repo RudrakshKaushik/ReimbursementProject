@@ -4,6 +4,25 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
 from django.contrib.auth import login
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+from rest_framework import status
+from django.utils import timezone
+from datetime import timedelta
+from decimal import Decimal
+from rest_framework.permissions import AllowAny
+import base64
+
+import requests
+
+
+from .models import Attachment, ExpenseRecord, ExpenseLineItem, Approval
+
+
+
+from datetime import datetime, date
+from decimal import Decimal
 
 from .models import (
     ApprovalRule,
@@ -259,70 +278,47 @@ def dashboard_expense_list(request):
         "total_items": expense_list.count(),
         "expense_list": ExpenseLineItemSerializer(expense_list, many=True).data
     })
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import json
 
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import json
-
-
-import base64
-import json
-import requests
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
-from .models import Attachment, ExpenseRecord, ExpenseLineItem
-
-
-import base64
-import json
-import requests
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
-from .models import Attachment, ExpenseRecord, ExpenseLineItem
-
-
-
-import json
-import base64
-import requests
-
-from datetime import datetime, date
-from decimal import Decimal
-
+@csrf_exempt
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([AllowAny])
 def gemini_api(request):
-
     try:
         data = request.data
 
         expense_record_id = data.get("expense_record_id")
-        attachment_id = data.get("attachment_id")
+        attachment_ids = data.get("attachment_ids")
 
-        if not expense_record_id or not attachment_id:
+        print("🔥 API HIT")
+
+        print("expense_record_id:", expense_record_id)
+        print("attachment_ids:", attachment_ids)
+
+        if not expense_record_id or not attachment_ids:
             return Response(
                 {"error": "Missing required fields"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         expense_record = ExpenseRecord.objects.get(id=expense_record_id)
-        attachment = Attachment.objects.get(id=attachment_id)
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
+        created_items = []
+        total_bill_count = 0
 
-        PROMPT = """
-You are an expert expense document analyzer.
+        for attachment_id in attachment_ids:
 
-The uploaded image or document is a bill or receipt. The image can contain multiple or duplicate bills, so read details carefully.
+            try:
+                attachment = Attachment.objects.get(id=attachment_id)
+            except Attachment.DoesNotExist:
+                continue  # skip invalid attachment
 
-Each bill belongs to exactly one of these categories:
+            # 🔥 Convert to base64
+            base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
+            base64_data = base64_data.replace("\n", "").replace("\r", "")
+            PROMPT="""
+               You are an expert expense document analyzer.
+
+The uploaded image or document is a bill or receipt. The image can have multiple or duplicate bills so read details carefully. Each belongs to exactly one of these categories:
 - Food and Beverages
 - Hotel/Accommodation
 - Flight Travel
@@ -339,38 +335,35 @@ Each bill belongs to exactly one of these categories:
 - WFH setup
 - Phone and internet bill
 
-If none of the above categories match, use: Miscellaneous.
-
-If no currency is found in the bill, use: USD.
+If it seems that above categories don't match with the doc, take the category as Miscellaneous.
+If it seems that there is no currency in the bill, take it as USD.
 
 Your task:
 1. Read the document carefully.
-2. For EACH bill, extract:
-   - type (expense category)
-   - amount (total bill amount)
-   - currency (ISO-4217 code)
-   - bill_date (only date)
-   - additional_info (vendor/merchant name and any useful extra info)
+2. Identify:
+   - Expense category (type)
+   - Total bill amount (amount)
+   - Currency in ISO-4217 code
+   - Bill Date (only date)
+   - Vendor / merchant name and any useful extra info (additional info)
 
 Return ONLY valid JSON.
+Return a raw JSON object, not a string.
+Do NOT wrap the output in quotes.
+Do NOT use markdown or ``` blocks.
+Do NOT escape characters.
 
-Strict rules:
-- Return a raw JSON object (NOT a string)
-- Do NOT wrap the output in quotes
-- Do NOT use markdown or ``` blocks
-- Do NOT include explanations or extra text
-- Do NOT escape characters unnecessarily
-- Do NOT omit any keys
-- Do NOT add extra keys
-
-If a value is NOT found:
+If a value is NOT found in the bill, return an empty value:
 - string → ""
 - number → null
 - object → {}
 - array → []
 
-Return JSON strictly in this structure:
+Do NOT omit any keys.
+Do NOT add extra keys.
+Do NOT include explanations, markdown, or extra text.
 
+Return JSON strictly in the following structure:
 {
   "bills": [
     {
@@ -384,112 +377,94 @@ Return JSON strictly in this structure:
 }
 """
 
-        # base64 conversion
-        base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
-        base64_data = base64_data.replace("\n", "").replace("\r", "")
-
-        request_body = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": base64_data
+            request_body = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": base64_data
+                                }
+                            },
+                            {
+                                "text": PROMPT
                             }
-                        },
-                        {
-                            "text": PROMPT
-                        }
-                    ]
-                }
-            ]
-        }
+                        ]
+                    }
+                ]
+            }
 
-        headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": ""
-        }
-
-        response = requests.post(
-            url,
-            headers=headers,
-            data=json.dumps(request_body)
-        )
-
-        response_json = response.json()
-
-        try:
-            gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-
-            # clean JSON
-            gemini_text = gemini_text.strip().replace("```json", "").replace("```", "")
-
-            parsed_data = json.loads(gemini_text)
-
-            bills = parsed_data.get("bills", [])
-            bill_count = len(bills)
-
-        except Exception as e:
-            return Response({
-                "error": "Failed to parse Gemini response",
-                "details": str(e),
-                "raw_response": response_json
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        # 👉 Take only first bill
-        bill = bills[0] if bills else {}
-
-        # ✅ SAFE DATE PARSE
-        bill_date = bill.get("bill_date")
-        try:
-            bill_date = datetime.strptime(bill_date, "%Y-%m-%d").date() if bill_date else date.today()
-        except:
-            bill_date = date.today()
-
-        # ✅ SAFE AMOUNT PARSE
-        amount = bill.get("amount")
-        try:
-            amount = Decimal(str(amount)) if amount is not None else Decimal("0.00")
-        except:
-            amount = Decimal("0.00")
-
-        created_items = []
-
-        for i in range(1):
-            line_item = ExpenseLineItem.objects.create(
-                expense_record=expense_record,
-                attachment=attachment,
-                description=bill.get("additional_info", "")[:500],
-                date=bill_date,
-                category=bill.get("type", ""),
-                amount=amount,
-                vendor=bill.get("additional_info", "")[:255]
+            response = requests.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": "AIzaSyAJniUdltPUudyaYogZr2qUDwEVJDqfuAY"
+                },
+                data=json.dumps(request_body)
             )
-            created_items.append(line_item.id)
+
+            response_json = response.json()
+
+            try:
+                gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
+                gemini_text = gemini_text.strip().replace("```json", "").replace("```", "")
+                parsed_data = json.loads(gemini_text)
+
+                bills = parsed_data.get("bills", [])
+                total_bill_count += len(bills)
+
+            except Exception as e:
+                continue  # skip this attachment if parsing fails
+
+            # 🔥 Create line items for each bill
+            for bill in bills:
+
+                # date parsing
+                bill_date = bill.get("bill_date")
+                try:
+                    bill_date = datetime.strptime(bill_date, "%Y-%m-%d").date() if bill_date else date.today()
+                except:
+                    bill_date = date.today()
+
+                # amount parsing
+                amount = bill.get("amount")
+                try:
+                    amount = Decimal(str(amount)) if amount else Decimal("0.00")
+                except:
+                    amount = Decimal("0.00")
+
+                line_item = ExpenseLineItem.objects.create(
+                    expense_record=expense_record,
+                    attachment=attachment,
+                    description=bill.get("additional_info", "")[:500],
+                    date=bill_date,
+                    category=bill.get("type", ""),
+                    amount=amount,
+                    vendor=bill.get("additional_info", "")[:255]
+                )
+
+                created_items.append(line_item.id)
 
         return Response({
-            "unique_bill_count": bill_count,
+            "total_bill_count": total_bill_count,
             "line_items_created": created_items
         }, status=status.HTTP_200_OK)
 
     except ExpenseRecord.DoesNotExist:
-        return Response({"error": "ExpenseRecord not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    except Attachment.DoesNotExist:
-        return Response({"error": "Attachment not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "ExpenseRecord not found"}, status=404)
 
     except Exception as e:
         return Response({
             "error": "Something went wrong",
             "details": str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        }, status=500)
+    
     
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def approval_api(request):
-
     expense_record_id = request.data.get("expense_record_id")
 
     if not expense_record_id:
@@ -501,7 +476,6 @@ def approval_api(request):
     try:
         expense_record = ExpenseRecord.objects.get(id=expense_record_id)
 
-        # Get all line items
         line_items = ExpenseLineItem.objects.filter(
             expense_record=expense_record
         )
@@ -512,50 +486,92 @@ def approval_api(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get policy (simple version: first policy)
-        policy = Policy.objects.first()
-
-        if not policy:
-            return Response(
-                {"error": "Policy not configured"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         violations = []
-        total_amount = 0
+        total_amount = Decimal("0.00")
+        approvers_set = set()
 
-        # 🔍 Validate each line item
+        # 🔹 3 month rule
+        three_months_ago = timezone.now().date() - timedelta(days=90)
+
+        # 🔹 Load rules
+        rules = ApprovalRule.objects.filter(is_active=True)
+
         for item in line_items:
             total_amount += item.amount
 
-            if item.amount > policy.max_amount:
+            # 🔥 Normalize category
+            item_category = (item.category or "").strip().lower()
+
+            # 🔥 Match rule by category
+            matched_rule = rules.filter(
+                name__iexact=item_category
+            ).first()
+
+            # ❌ No matching rule
+            if not matched_rule:
                 violations.append({
                     "line_item_id": item.id,
                     "amount": float(item.amount),
-                    "reason": "Exceeds max allowed per item"
+                    "reason": "No matching approval rule"
+                })
+                continue
+
+            # ✅ Add approver from rule
+            approvers_set.add(matched_rule.approver)
+
+            # 1️⃣ Date check
+            if item.date and item.date < three_months_ago:
+                violations.append({
+                    "line_item_id": item.id,
+                    "amount": float(item.amount),
+                    "reason": "Bill older than 3 months"
                 })
 
-        # 🔍 Decide status
-        if violations:
-            approval_status = "REJECTED"
+            # 2️⃣ Amount check
+            if item.amount > matched_rule.max_amount:
+                violations.append({
+                    "line_item_id": item.id,
+                    "amount": float(item.amount),
+                    "reason": f"Amount exceeds max limit ({matched_rule.max_amount})"
+                })
+
+            # (Optional) Min check
+           
+
+        # 🔹 Final decision
+        approval_status = "ADMIN PENDING" if violations else "APPROVED"
+
+        # 🔥 Create Approval for EACH approver
+        created_approvals = []
+
+        for approver in approvers_set:
+            approval, created = Approval.objects.get_or_create(
+                expense_record=expense_record,
+                approver=approver
+            )
+
+            approval.status = approval_status
+            approval.comments = "Auto-evaluated by system"
+            approval.approved_at = timezone.now()
+            approval.save()
+
+            created_approvals.append(approval.id)
+
+        # 🔹 Update ExpenseRecord
+        if approval_status == "APPROVED":
+            expense_record.status = ExpenseRecord.STATUS_APPROVED
         else:
-            approval_status = "APPROVED"
+            expense_record.status = ExpenseRecord.STATUS_PENDING
 
-        # Update or create approval record
-        approval, created = Approval.objects.get_or_create(
-            expense_record=expense_record,
-            approver=request.user
-        )
-
-        approval.status = approval_status
-        approval.comments = "Auto-evaluated by policy engine"
-        approval.save()
+        expense_record.total_amount = total_amount
+        expense_record.save()
 
         return Response({
             "expense_record_id": expense_record.id,
             "status": approval_status,
             "total_amount": float(total_amount),
-            "violations": violations
+            "violations": violations,
+            "approvals_created": created_approvals
         }, status=status.HTTP_200_OK)
 
     except ExpenseRecord.DoesNotExist:
@@ -571,4 +587,4 @@ def approval_api(request):
                 "details": str(e)
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )    
+        )

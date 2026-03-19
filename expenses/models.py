@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-
+from django.contrib.auth.models import User
 
 class Employee(models.Model):
     user = models.OneToOneField(
@@ -146,33 +146,37 @@ class ApprovalRule(models.Model):
         return self.name
     
 
-from django.db import models
-from django.contrib.auth.models import User
+
 
 class Approval(models.Model):
 
+    STATUS_PENDING = "ADMIN PENDING"
+    STATUS_APPROVED = "APPROVED"
+    STATUS_REJECTED = "REJECTED"
+
     STATUS_CHOICES = [
-        ("PENDING", "Pending"),
-        ("APPROVED", "Approved"),
-        ("REJECTED", "Rejected"),
+        (STATUS_PENDING, "Admin Pending"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
     ]
 
-    expense_record = models.ForeignKey(
-        ExpenseRecord,
+    expense_record = models.OneToOneField(   # 🔥 only ONE approval per expense
+        "ExpenseRecord",
         on_delete=models.CASCADE,
-        related_name="approvals"
+        related_name="approval"
     )
 
     approver = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="approvals_to_review"
+        "Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
     )
 
     status = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=STATUS_CHOICES,
-        default="PENDING"
+        default=STATUS_PENDING
     )
 
     comments = models.TextField(blank=True, null=True)
@@ -180,7 +184,8 @@ class Approval(models.Model):
     approved_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.expense_record.id} - {self.approver.username} - {self.status}"    
+        return f"{self.expense_record_id} - {self.status}"    
 
