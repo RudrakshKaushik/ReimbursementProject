@@ -43,6 +43,15 @@ body {
   margin: 0 auto;
 }
 
+/* Full-width content (e.g. employee list table) */
+.app-main--full {
+  max-width: none;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  text-align: left;
+}
+
 .card-list {
   list-style: none;
   padding: 0;

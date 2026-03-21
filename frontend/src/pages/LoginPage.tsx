@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { login, type LoginResponse } from "../api/client";
+import { useAuth } from "@context/AuthContext";
 
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { setAuthStatus } = useAuth();
   const returnTo =
-    new URLSearchParams(location.search).get("returnTo") ?? undefined;
+    new URLSearchParams(location.search).get("returnTo") ?? "/dashboard";
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

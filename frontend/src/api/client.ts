@@ -38,11 +38,88 @@ export type LoginErrorResponse = {
 
 export type LoginResponse = LoginSuccessResponse | LoginErrorResponse;
 
+export type EmployeeItem = {
+  id: number;
+  name: string;
+  email: string;
+  manager: number | null;
+  is_active: boolean;
+};
+
+export type EmployeeListResponse = {
+  success: boolean;
+  total_employees: number;
+  employees: EmployeeItem[];
+};
+
+export type ExpenseListEmployee = EmployeeItem;
+
+export type ExpenseListItem = {
+  id: number;
+  employee: ExpenseListEmployee;
+  month: string;
+  status: string;
+  total_amount: string;
+  current_approver: number | null;
+  created_at: string;
+  updated_at: string;
+  line_items?: ExpenseLineItemEntry[];
+};
+
+export type ExpenseListResponse = {
+  success: boolean;
+  employee_email: string;
+  total_expenses: number;
+  expenses: ExpenseListItem[];
+};
+
+export type AttachmentInfo = {
+  id: number;
+  filename: string;
+  content_type: string;
+  size: number;
+  file: string;
+};
+
+export type ExpenseLineItemEntry = {
+  id: number;
+  description: string;
+  date: string;
+  category: string;
+  amount: string;
+  vendor: string;
+  attachment?: AttachmentInfo;
+  created_at: string;
+};
+
+export type ExpenseLineItemListResponse = {
+  success: boolean;
+  employee_email: string;
+  total_items: number;
+  expense_list: ExpenseLineItemEntry[];
+};
+
 const api = axios.create({
   baseURL: "/api",
   // Auth in this app is Django session cookie-based, so include cookies.
   withCredentials: true
 });
+
+export async function fetchEmployees(): Promise<EmployeeListResponse> {
+  const response = await api.get<EmployeeListResponse>("/dashboard/employee/");
+  return response.data;
+
+}
+
+export async function fetchExpenseList(): Promise<ExpenseListResponse> {
+  const response = await api.get<ExpenseListResponse>("/dashboard/expenselist/");
+  return response.data;
+}
+
+export async function fetchExpenseLineItemList(): Promise<ExpenseLineItemListResponse> {
+  const response = await api.get<ExpenseLineItemListResponse>("/dashboard/expenselist/");
+  return response.data;
+}
 
 export async function fetchExpenseRecords(): Promise<ExpenseRecord[]> {
   const response = await api.get<ExpenseRecord[]>("/expense-records/");
@@ -61,20 +138,9 @@ export async function approveExpenseRecord(id: string): Promise<ExpenseRecord> {
 
 export async function checkAuth(): Promise<boolean> {
   try {
-    // If the session cookie is valid, this returns 200.
     await api.get("/dashboard/", { timeout: 2000 });
     return true;
-  } catch (err) {
-    // If the session cookie is missing/expired (401/403) OR the backend
-    // is unreachable (network error), treat as logged out so we can redirect.
-    if (axios.isAxiosError(err)) {
-      const status = err.response?.status;
-      if (status === 401 || status === 403) return false;
-      // Network / CORS / proxy errors often have no response; treat as unauthenticated.
-      if (!err.response) return false;
-      return false;
-    }
-
+  } catch {
     return false;
   }
 }
