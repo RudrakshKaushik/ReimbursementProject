@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 
-import "./tailwind.css";
 import "./styles.css";
 
 const rootEl = document.getElementById("root");

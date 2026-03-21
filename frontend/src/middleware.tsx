@@ -1,6 +1,6 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
+import Login from "./pages/Login";
 import { useAuth } from "@context/AuthContext";
 
 function LoadingRoute() {
@@ -43,5 +43,5 @@ export function LoginRoute() {
     return <Navigate to={returnTo} replace />;
   }
 
-  return <LoginPage />;
+  return <Login />;
 }
