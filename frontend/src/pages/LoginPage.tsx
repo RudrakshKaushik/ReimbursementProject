@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { login, type LoginResponse } from "../api/client";
+import { login } from "../api/client";
+import { useAuth } from "@context/AuthContext";
 
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo =
     new URLSearchParams(location.search).get("returnTo") ?? undefined;
+
+  const { setAuthStatus } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,21 +19,21 @@ function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
       const res = await login(email, password);
 
       if (res.success) {
-        // ✅ update global auth state
         setAuthStatus("authenticated");
-
-        // ✅ redirect to original page
-        navigate(returnTo, { replace: true });
+        navigate(returnTo ?? "/dashboard", { replace: true });
       } else {
         setError(res.message);
       }
     } catch {
-      setError("Something went wrong");
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 

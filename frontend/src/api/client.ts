@@ -41,7 +41,10 @@ export type LoginResponse = LoginSuccessResponse | LoginErrorResponse;
 const api = axios.create({
   baseURL: "/api",
   // Auth in this app is Django session cookie-based, so include cookies.
-  withCredentials: true
+  withCredentials: true,
+  // Send the CSRF token back on write requests like POST/PATCH/DELETE.
+  xsrfHeaderName: "X-CSRFToken",
+  xsrfCookieName: "csrftoken"
 });
 
 export async function fetchExpenseRecords(): Promise<ExpenseRecord[]> {
