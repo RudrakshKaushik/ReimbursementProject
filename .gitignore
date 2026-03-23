@@ -2,5 +2,5 @@ senv
 dump.sql
 expense.sql
 frontend/.env
-frontend/node_modules
-frontend/dist
+frontend/node_modules/
+frontend/dist/

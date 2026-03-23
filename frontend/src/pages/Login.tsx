@@ -58,7 +58,7 @@ function Login() {
             </label>
             <input
               id="email"
-              type="email"
+              type="text"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}

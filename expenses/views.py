@@ -14,6 +14,7 @@ from datetime import timedelta
 from decimal import Decimal
 from rest_framework.permissions import AllowAny
 import base64
+from rest_framework.authtoken.models import Token
 
 import requests
 
@@ -161,19 +162,23 @@ def login_api(request):
 
     user = authenticate(username=username, password=password)
 
-    if user is not None:
-        django_login(request, user)
-        return Response({
-            "success": True,
-            "message": "Login successful",
-            "user_id": user.id,
-            "redirect_url": "/dashboard"  # Frontend can use this
-        }, status=status.HTTP_200_OK)
+    if user is None:
+        return Response({"error": "Invalid credentials"}, status=400)
+    
+    token, _ = Token.objects.get_or_create(user=user)
 
-    return Response(
-        {"success": False, "message": "Invalid email or password"},
-        status=status.HTTP_401_UNAUTHORIZED,
-    )
+    django_login(request, user)
+    
+    return Response({
+        "token": token.key,
+        "user_id": user.id,
+        "username": user.username,
+        "success": True,
+        "message": "Login successful",
+        "redirect_url": "/dashboard"
+    }, status=status.HTTP_200_OK)
+
+   
 
 
 # -----------------------------
