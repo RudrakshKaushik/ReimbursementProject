@@ -3,7 +3,8 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
-from django.contrib.auth import login
+from django.contrib.auth import login as django_login
+from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -76,6 +77,7 @@ class ExpenseRecordViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
         record = self.get_object()
+        print(f"Approving record {pk} for user {request.user} (is_staff: {request.user.is_staff})")
         if not request.user.is_staff:
             return Response(
                 {"detail": "Only managers can approve expenses."},
@@ -129,7 +131,9 @@ class EmailMessageViewSet(viewsets.ModelViewSet):
 # -----------------------------
 # Login API
 # -----------------------------
+@csrf_exempt
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def login_api(request):
     """
     Login API accepts email and password,
@@ -146,10 +150,19 @@ def login_api(request):
         )
 
     # Authenticate via Django user
-    user = authenticate(username=email, password=password)
+    # Try to find a user with this email first since standard authenticate()
+    # matches username field but we have email from frontend.
+    try:
+        user_with_email = User.objects.get(email=email)
+        username = user_with_email.username
+    except User.DoesNotExist:
+        # If not found, fall back to whatever was provided as username
+        username = email
+
+    user = authenticate(username=username, password=password)
 
     if user is not None:
-        login(request, user)
+        django_login(request, user)
         return Response({
             "success": True,
             "message": "Login successful",
