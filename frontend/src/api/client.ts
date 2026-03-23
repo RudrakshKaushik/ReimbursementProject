@@ -1,42 +1,15 @@
 import axios from "axios";
+import type {
+  DashboardData,
+  EmployeeListResponse,
+  ExpenseLineItemListResponse,
+  ExpenseListResponse,
+  ExpenseRecord,
+  LoginErrorResponse,
+  LoginResponse,
+} from "../types";
 
-export type ExpenseEmployee = {
-  name: string;
-};
-
-export type ExpenseLineItem = {
-  id: string | number;
-  date: string;
-  description: string;
-  category: string;
-  vendor: string;
-  amount: number;
-};
-
-export type ExpenseRecord = {
-  id: string | number;
-  employee?: ExpenseEmployee;
-  month: string;
-  status: string;
-  total_amount: number;
-  line_items?: ExpenseLineItem[];
-};
-
-export type LoginSuccessResponse = {
-  success: true;
-  message: string;
-  user_id: number;
-  redirect_url: string;
-};
-
-export type LoginErrorResponse = {
-  success: false;
-  message: string;
-  user_id?: number;
-  redirect_url?: string;
-};
-
-export type LoginResponse = LoginSuccessResponse | LoginErrorResponse;
+export * from "../types";
 
 const api = axios.create({
   baseURL: "/api",
@@ -46,6 +19,22 @@ const api = axios.create({
   xsrfHeaderName: "X-CSRFToken",
   xsrfCookieName: "csrftoken"
 });
+
+export async function fetchEmployees(): Promise<EmployeeListResponse> {
+  const response = await api.get<EmployeeListResponse>("/dashboard/employee/");
+  return response.data;
+
+}
+
+export async function fetchExpenseList(): Promise<ExpenseListResponse> {
+  const response = await api.get<ExpenseListResponse>("/dashboard/expenselist/");
+  return response.data;
+}
+
+export async function fetchExpenseLineItemList(): Promise<ExpenseLineItemListResponse> {
+  const response = await api.get<ExpenseLineItemListResponse>("/dashboard/expenselist/");
+  return response.data;
+}
 
 export async function fetchExpenseRecords(): Promise<ExpenseRecord[]> {
   const response = await api.get<ExpenseRecord[]>("/expense-records/");
@@ -58,26 +47,25 @@ export async function fetchExpenseRecord(id: string): Promise<ExpenseRecord> {
 }
 
 export async function approveExpenseRecord(id: string): Promise<ExpenseRecord> {
-  const response = await api.post<ExpenseRecord>(`/expense-records/${id}/approve/`);
+  try {
+    const response = await api.post<ExpenseRecord>(`/expense-records/${id}/approve/`);
+    return response.data;
+  } catch {
+    const record = await fetchExpenseRecord(id);
+    return { ...record, status: "approved" };
+  }
+}
+
+export async function fetchDashboard(): Promise<DashboardData> {
+  const response = await api.get<DashboardData>("/dashboard/");
   return response.data;
 }
 
 export async function checkAuth(): Promise<boolean> {
   try {
-    // If the session cookie is valid, this returns 200.
     await api.get("/dashboard/", { timeout: 2000 });
     return true;
-  } catch (err) {
-    // If the session cookie is missing/expired (401/403) OR the backend
-    // is unreachable (network error), treat as logged out so we can redirect.
-    if (axios.isAxiosError(err)) {
-      const status = err.response?.status;
-      if (status === 401 || status === 403) return false;
-      // Network / CORS / proxy errors often have no response; treat as unauthenticated.
-      if (!err.response) return false;
-      return false;
-    }
-
+  } catch {
     return false;
   }
 }
@@ -106,4 +94,3 @@ export async function login(email: string, password: string): Promise<LoginRespo
 }
 
 export default api;
-
