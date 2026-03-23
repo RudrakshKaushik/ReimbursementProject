@@ -4,7 +4,7 @@ import { RequireAuth, LoginRoute } from "@/middleware";
 import { AuthProvider, useAuth } from "@context/AuthContext";
 import { Sidebar } from "@/components/Sidebar";
 import { AppHeader } from "@/components/AppHeader";
-import { fetchDashboard } from "@/api/client";
+import { fetchDashboard, logout } from "@/api/client";
 import Dashboard from "@/pages/Dashboard";
 import Employee from "@/pages/Employee";
 import Expense from "@/pages/Expense";
@@ -25,6 +25,7 @@ function AppLayout() {
   }, []);
 
   function handleLogout() {
+    logout();
     setAuthStatus("unauthenticated");
     navigate("/login", { replace: true });
   }

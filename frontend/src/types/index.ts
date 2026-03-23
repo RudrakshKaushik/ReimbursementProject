@@ -21,6 +21,7 @@ export type ExpenseRecord = {
 };
 
 export type LoginSuccessResponse = {
+  token: string;
   success: true;
   message: string;
   user_id: number;

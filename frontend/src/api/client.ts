@@ -15,6 +15,28 @@ const envApiUrl =
   (import.meta.env as Record<string, string | undefined>).api_url ??
   import.meta.env.VITE_API_URL;
 
+const AUTH_COOKIE_NAME = "auth_token";
+
+function setAuthTokenCookie(token: string) {
+  document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+}
+
+function clearAuthTokenCookie() {
+  document.cookie = `${AUTH_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+function getAuthTokenFromCookie(): string | null {
+  const cookie = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(`${AUTH_COOKIE_NAME}=`));
+  if (!cookie) return null;
+  return decodeURIComponent(cookie.slice(`${AUTH_COOKIE_NAME}=`.length));
+}
+
+function getAuthToken(): string | null {
+  return getAuthTokenFromCookie();
+}
+
 const api = axios.create({
   baseURL: envApiUrl,
   // Auth in this app is Django session cookie-based, so include cookies.
@@ -22,6 +44,22 @@ const api = axios.create({
   // Send the CSRF token back on write requests like POST/PATCH/DELETE.
   xsrfHeaderName: "X-CSRFToken",
   xsrfCookieName: "csrftoken"
+});
+
+const existingToken = getAuthToken();
+if (existingToken) {
+  api.defaults.headers.common.Authorization = `Token ${existingToken}`;
+}
+
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Token ${token}`;
+  } else if (config.headers) {
+    delete config.headers.Authorization;
+  }
+  return config;
 });
 
 export async function fetchEmployees(): Promise<EmployeeListResponse> {
@@ -66,6 +104,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
 }
 
 export async function checkAuth(): Promise<boolean> {
+  if (getAuthToken()) return true;
   try {
     await api.get("/dashboard/", { timeout: 2000 });
     return true;
@@ -80,6 +119,10 @@ export async function login(email: string, password: string): Promise<LoginRespo
       email,
       password
     });
+    if (response.data.success) {
+      setAuthTokenCookie(response.data.token);
+      api.defaults.headers.common.Authorization = `Token ${response.data.token}`;
+    }
     return response.data;
   } catch (err) {
     // If the backend uses non-2xx for invalid credentials, try to extract the payload anyway.
@@ -95,6 +138,11 @@ export async function login(email: string, password: string): Promise<LoginRespo
 
     throw err;
   }
+}
+
+export function logout() {
+  clearAuthTokenCookie();
+  delete api.defaults.headers.common.Authorization;
 }
 
 export default api;

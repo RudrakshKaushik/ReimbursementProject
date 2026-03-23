@@ -12,19 +12,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("unknown");
-  const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === "true";
-
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-
-        if (BYPASS_AUTH) {
-            if (!cancelled) setAuthStatus("authenticated");
-            return;
-        }
 
         const authed = await checkAuth();
         if (!cancelled) {
