@@ -11,8 +11,12 @@ import type {
 
 export * from "../types";
 
+const envApiUrl =
+  (import.meta.env as Record<string, string | undefined>).api_url ??
+  import.meta.env.VITE_API_URL;
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: envApiUrl,
   // Auth in this app is Django session cookie-based, so include cookies.
   withCredentials: true,
   // Send the CSRF token back on write requests like POST/PATCH/DELETE.
