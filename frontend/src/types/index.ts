@@ -20,6 +20,18 @@ export type ExpenseRecord = {
   line_items?: ExpenseLineItem[];
 };
 
+export type ApprovalApiResponse = {
+  expense_record_id: string | number;
+  status: string;
+  total_amount: number;
+  violations?: Array<{
+    line_item_id: string | number;
+    amount: number;
+    reason: string;
+  }>;
+  approvals_created?: Array<string | number>;
+};
+
 export type LoginSuccessResponse = {
   token: string;
   success: true;

@@ -17,6 +17,11 @@ export interface DataTableProps<T> {
   getRowKey: (row: T) => string | number;
   footer?: React.ReactNode;
   minWidth?: string;
+  /**
+   * Shown when `data` is empty.
+   * Keep it generic; pages can override if needed.
+   */
+  emptyMessage?: string;
 }
 
 export function DataTable<T = unknown>({
@@ -25,7 +30,20 @@ export function DataTable<T = unknown>({
   getRowKey,
   footer,
   minWidth = "640px",
+  emptyMessage = "No records found.",
 }: DataTableProps<T>) {
+  if (data.length === 0) {
+    return (
+      <div className="w-full">
+        <div className="flex flex-col items-center gap-2 px-4 py-12 text-gray-400">
+          <span className="text-4xl">📭</span>
+          <p className="text-base">{emptyMessage}</p>
+        </div>
+        {footer}
+      </div>
+    );
+  }
+
   return (
     <div className="w-full overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
       <div className="overflow-x-auto">

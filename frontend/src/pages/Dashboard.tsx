@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchDashboard, type DashboardData } from "@/api/client";
+import {
+  IconWallet,
+  IconListDetails,
+  IconCircleCheck,
+  IconClock,
+  IconReceipt,
+} from "@tabler/icons-react";
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -23,9 +30,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function SummaryCard({
   icon, label, value, sub,
-}: { icon: string; label: string; value: string | number; sub?: string }) {
+}: { icon: React.ReactNode; label: string; value: string | number; sub?: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+    <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
       <div className="text-2xl leading-none">{icon}</div>
       <div className="flex-1">
         <p className="mb-0.5 text-xs font-medium uppercase tracking-wider text-gray-500">{label}</p>
@@ -121,31 +128,31 @@ export default function Dashboard() {
 
       <section className="mb-7 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
         <SummaryCard
-          icon="💰"
+          icon={<IconWallet size={28} stroke={2} />}
           label="Total Spend"
-          value={`₹${totalSpend.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
+          value={`$ ${totalSpend.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
           sub="Across all records"
         />
         <SummaryCard
-          icon="📋"
+          icon={<IconListDetails size={28} stroke={2} />}
           label="Expense Records"
           value={expenses.length}
           sub="All months"
         />
         <SummaryCard
-          icon="✅"
+          icon={<IconCircleCheck size={28} stroke={2} />}
           label="Approved"
           value={approved}
           sub={`${expenses.length ? ((approved / expenses.length) * 100).toFixed(0) : 0}% approval rate`}
         />
         <SummaryCard
-          icon="⏳"
+          icon={<IconClock size={28} stroke={2} />}
           label="Pending Review"
           value={pending}
           sub="Awaiting approval"
         />
         <SummaryCard
-          icon="🧾"
+          icon={<IconReceipt size={28} stroke={2} />}
           label="Total Line Items"
           value={expense_list.length}
           sub="Individual bills"
@@ -199,7 +206,7 @@ export default function Dashboard() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">No.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Month</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Amount</th>
@@ -208,7 +215,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.map((exp, idx) => (
+                  {expenses.slice(0, 10).map((exp, idx) => (
                     <tr key={exp.id} className="border-b border-gray-100 transition-colors last:border-b-0 hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-400">{idx + 1}</td>
                       <td className="px-4 py-3 font-semibold text-gray-900">
@@ -254,7 +261,7 @@ export default function Dashboard() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">No.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Category</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Description</th>
@@ -263,7 +270,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {expense_list.map((item, idx) => (
+                  {expense_list.slice(0, 10).map((item, idx) => (
                     <tr key={item.id} className="border-b border-gray-100 transition-colors last:border-b-0 hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-400">{idx + 1}</td>
                       <td className="px-4 py-3 text-sm text-gray-400">

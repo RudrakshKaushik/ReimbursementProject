@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { fetchExpenseLineItemList } from "@/api/client";
 import type { ExpenseLineItemListResponse, ExpenseLineItemEntry } from "@/types";
 import { DataTable } from "@/components/DataTable";
@@ -34,8 +35,14 @@ export default function ExpenseList() {
         setError(null);
         const res = await fetchExpenseLineItemList();
         setData(res);
-      } catch {
-        setError("Failed to load expense items");
+      } catch (err) {
+        const fallback = "Failed to load expense items";
+        if (axios.isAxiosError(err) && err.response?.data) {
+          const resp = err.response.data as any;
+          setError(typeof resp?.message === "string" ? resp.message : fallback);
+        } else {
+          setError(fallback);
+        }
       } finally {
         setLoading(false);
       }

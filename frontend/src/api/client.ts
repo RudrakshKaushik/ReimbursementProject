@@ -5,6 +5,7 @@ import type {
   ExpenseLineItemListResponse,
   ExpenseListResponse,
   ExpenseRecord,
+  ApprovalApiResponse,
   LoginErrorResponse,
   LoginResponse,
 } from "../types";
@@ -88,15 +89,13 @@ export async function fetchExpenseRecord(id: string): Promise<ExpenseRecord> {
   return response.data;
 }
 
-export async function approveExpenseRecord(id: string): Promise<ExpenseRecord> {
-  try {
-    await api.post(`/approval_api/`, { expense_record_id: id });
-    // approval_api updates the ExpenseRecord on the backend, so refetch to return the full record
-    return await fetchExpenseRecord(id);
-  } catch {
-    const record = await fetchExpenseRecord(id);
-    return record;
-  }
+export async function approveExpenseRecord(
+  id: string,
+): Promise<ApprovalApiResponse> {
+  const response = await api.post<ApprovalApiResponse>(`/approval_api/`, {
+    expense_record_id: id,
+  });
+  return response.data;
 }
 
 export async function fetchDashboard(): Promise<DashboardData> {

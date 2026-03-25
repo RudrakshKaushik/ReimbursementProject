@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { fetchEmployees } from "@/api/client";
 import type { EmployeeListResponse, EmployeeItem } from "@/types";
 import { DataTable } from "@/components/DataTable";
@@ -33,8 +34,18 @@ export default function Employee() {
         setError(null);
         const res = await fetchEmployees();
         setData(res);
-      } catch {
-        setError("Failed to load employees");
+      } catch (err) {
+        const fallback = "Failed to load employees";
+        if (axios.isAxiosError(err) && err.response?.data) {
+          const resp = err.response.data as any;
+          const msg =
+            (typeof resp?.message === "string" && resp.message) ||
+            (typeof resp?.error === "string" && resp.error) ||
+            (typeof resp?.detail === "string" && resp.detail);
+          setError(msg ?? fallback);
+        } else {
+          setError(fallback);
+        }
       } finally {
         setLoading(false);
       }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchExpenseList } from "@/api/client";
 import type { ExpenseListResponse, ExpenseListItem } from "@/types";
@@ -49,8 +50,18 @@ export default function Expense() {
         setError(null);
         const res = await fetchExpenseList();
         setData(res);
-      } catch {
-        setError("Failed to load expenses");
+      } catch (err) {
+        const fallback = "Failed to load expenses";
+        if (axios.isAxiosError(err) && err.response?.data) {
+          const resp = err.response.data as any;
+          const msg =
+            (typeof resp?.message === "string" && resp.message) ||
+            (typeof resp?.error === "string" && resp.error) ||
+            (typeof resp?.detail === "string" && resp.detail);
+          setError(msg ?? fallback);
+        } else {
+          setError(fallback);
+        }
       } finally {
         setLoading(false);
       }

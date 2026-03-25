@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
 import {
   approveExpenseRecord,
   fetchExpenseRecord,
@@ -16,6 +17,7 @@ function ExpenseRecord() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -41,13 +43,44 @@ function ExpenseRecord() {
     if (!id) return;
 
     try {
+      setApproveError(null);
       setApproving(true);
-      const updated = await approveExpenseRecord(id);
-      setRecord(updated);
+      const approval = await approveExpenseRecord(id);
+
+      const violationReasons =
+        Array.isArray(approval.violations) && approval.violations.length > 0
+          ? approval.violations
+              .map((v) => v.reason)
+              .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
+              .join(", ")
+          : null;
+
+      if (violationReasons) {
+        setApproveError(violationReasons);
+      }
+
+      // approval_api does not return full line items; update the fields we rely on.
+      setRecord((prev) =>
+        prev
+          ? { ...prev, status: approval.status, total_amount: approval.total_amount }
+          : prev,
+      );
       // Optional: navigate back to list after approval
       // navigate("/");
-    } catch {
-      alert("Failed to approve record");
+    } catch (err) {
+      const fallback = "Failed to approve record";
+      if (axios.isAxiosError(err) && err.response?.data) {
+        const resp = err.response.data as any;
+        const msg =
+          (typeof resp?.message === "string" && resp.message) ||
+          (typeof resp?.error === "string" && resp.error) ||
+          (typeof resp?.detail === "string" && resp.detail) ||
+          (typeof resp?.details === "string" && resp.details) ||
+          fallback;
+        setApproveError(msg);
+      } else {
+        setApproveError(fallback);
+      }
     } finally {
       setApproving(false);
     }
@@ -124,6 +157,10 @@ function ExpenseRecord() {
               : "Approve"}
         </button>
       </div>
+
+      {approveError && (
+        <p className="mt-3 text-sm font-medium text-red-600">{approveError}</p>
+      )}
     </div>
   );
 }
