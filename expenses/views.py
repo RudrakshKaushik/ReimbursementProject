@@ -417,7 +417,7 @@ Return JSON strictly in the following structure:
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": "AIzaSyCyY9-6qIJsKJ52ucfoGOmzVPUHKjThZlc"
+                    "x-goog-api-key": ""
                 },
                 data=json.dumps(request_body)
             )
