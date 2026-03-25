@@ -16,26 +16,36 @@ type NavItem = {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { key: "employee", label: "Employee", path: "/employee", icon: IconUsers },
-  { key: "employees", label: "Employee", path: "/employee", icon: IconUsers },
   { key: "expenses", label: "Expenses", path: "/expense", icon: IconFolder },
-  { key: "expense_list", label: "Expense List", path: "/expense-list", icon: IconReceipt },
+  {
+    key: "expense_list",
+    label: "Expense List",
+    path: "/expense-list",
+    icon: IconReceipt,
+  },
 ];
 
 type SidebarProps = {
-  sections: string[];
+  hasEmployee: boolean;
+  hasExpenses: boolean;
+  hasExpenseList: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
 };
 
-export function Sidebar({ sections, collapsed, onToggleCollapse }: SidebarProps) {
+export function Sidebar({
+  hasEmployee,
+  hasExpenses,
+  hasExpenseList,
+  collapsed,
+  onToggleCollapse,
+}: SidebarProps) {
   const location = useLocation();
-  const sectionSet = new Set(sections);
-  const visibleItems = ALL_NAV_ITEMS.filter((item) => sectionSet.has(item.key));
-  const seen = new Set<string>();
-  const deduped = visibleItems.filter((item) => {
-    if (seen.has(item.path)) return false;
-    seen.add(item.path);
-    return true;
+  const visibleItems = ALL_NAV_ITEMS.filter((item) => {
+    if (item.key === "employee") return hasEmployee;
+    if (item.key === "expenses") return hasExpenses;
+    if (item.key === "expense_list") return hasExpenseList;
+    return false;
   });
 
   const baseLink =
@@ -87,7 +97,7 @@ export function Sidebar({ sections, collapsed, onToggleCollapse }: SidebarProps)
           <IconLayoutDashboard size={20} stroke={2} className="shrink-0" />
           {!collapsed && <span>Dashboard</span>}
         </NavLink>
-        {deduped.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink

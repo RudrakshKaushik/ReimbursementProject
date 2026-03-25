@@ -78,7 +78,14 @@ export default function Dashboard() {
     );
   }
 
-  const { employee, expenses, expense_list } = data;
+  // Backend response shape is not guaranteed; defend against missing fields.
+  const employee = data.employee;
+  const expenses = Array.isArray(data.expenses) ? data.expenses : [];
+  const expense_list = Array.isArray(data.expense_list) ? data.expense_list : [];
+
+  const employeeName = employee?.name ?? "User";
+  const employeeEmail = employee?.email ?? "";
+  const employeeIsActive = employee?.is_active ?? false;
 
   // ── Derived stats ──
   const totalSpend = expense_list.reduce(
@@ -92,19 +99,23 @@ export default function Dashboard() {
       <header className="mb-7 flex items-center justify-between rounded-2xl bg-gradient-to-br from-slate-800 to-blue-600 px-8 py-6 text-white shadow-lg">
         <div className="flex items-center gap-4">
           <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border-2 border-white/50 bg-white/25 text-2xl font-bold">
-            {employee.name.charAt(0).toUpperCase()}
+            {employeeName.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="mb-1 text-xl font-bold">Welcome, {employee.name.split(" ")[0]} 👋</h1>
-            <p className="m-0 text-sm opacity-80">{employee.email}</p>
+            <h1 className="mb-1 text-xl font-bold">
+              Welcome, {employeeName.split(" ")[0]} 👋
+            </h1>
+            <p className="m-0 text-sm opacity-80">{employeeEmail}</p>
           </div>
         </div>
         <span
           className={`rounded-full border border-white/50 px-3 py-1.5 text-xs font-semibold ${
-            employee.is_active ? "bg-green-500/25 text-green-200" : "bg-red-500/25 text-red-200"
+            employeeIsActive
+              ? "bg-green-500/25 text-green-200"
+              : "bg-red-500/25 text-red-200"
           }`}
         >
-          {employee.is_active ? "● Active" : "● Inactive"}
+          {employeeIsActive ? "● Active" : "● Inactive"}
         </span>
       </header>
 

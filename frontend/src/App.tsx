@@ -15,13 +15,33 @@ import NotFound from "@/pages/NotFound";
 function AppLayout() {
   const navigate = useNavigate();
   const { setAuthStatus } = useAuth();
-  const [sections, setSections] = useState<string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarState, setSidebarState] = useState<{
+    hasEmployee: boolean;
+    hasExpenses: boolean;
+    hasExpenseList: boolean;
+  }>({
+    hasEmployee: false,
+    hasExpenses: false,
+    hasExpenseList: false,
+  });
 
   useEffect(() => {
     fetchDashboard()
-      .then((data) => setSections(data.sections ?? []))
-      .catch(() => setSections([]));
+      .then((data) => {
+        setSidebarState({
+          hasEmployee: Boolean((data as any).employee),
+          hasExpenses: Array.isArray((data as any).expenses),
+          hasExpenseList: Array.isArray((data as any).expense_list),
+        });
+      })
+      .catch(() => {
+        setSidebarState({
+          hasEmployee: false,
+          hasExpenses: false,
+          hasExpenseList: false,
+        });
+      });
   }, []);
 
   function handleLogout() {
@@ -33,7 +53,9 @@ function AppLayout() {
   return (
     <div className="flex min-h-screen flex-1 overflow-hidden">
       <Sidebar
-        sections={sections}
+        hasEmployee={sidebarState.hasEmployee}
+        hasExpenses={sidebarState.hasExpenses}
+        hasExpenseList={sidebarState.hasExpenseList}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
       />

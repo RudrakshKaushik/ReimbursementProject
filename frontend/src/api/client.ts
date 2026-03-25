@@ -69,7 +69,7 @@ export async function fetchEmployees(): Promise<EmployeeListResponse> {
 }
 
 export async function fetchExpenseList(): Promise<ExpenseListResponse> {
-  const response = await api.get<ExpenseListResponse>("/dashboard/expenselist/");
+  const response = await api.get<ExpenseListResponse>("/dashboard/expenses/");
   return response.data;
 }
 
