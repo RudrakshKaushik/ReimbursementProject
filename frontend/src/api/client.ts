@@ -90,11 +90,12 @@ export async function fetchExpenseRecord(id: string): Promise<ExpenseRecord> {
 
 export async function approveExpenseRecord(id: string): Promise<ExpenseRecord> {
   try {
-    const response = await api.post<ExpenseRecord>(`/expense-records/${id}/approve/`);
-    return response.data;
+    await api.post(`/approval_api/`, { expense_record_id: id });
+    // approval_api updates the ExpenseRecord on the backend, so refetch to return the full record
+    return await fetchExpenseRecord(id);
   } catch {
     const record = await fetchExpenseRecord(id);
-    return { ...record, status: "approved" };
+    return record;
   }
 }
 
