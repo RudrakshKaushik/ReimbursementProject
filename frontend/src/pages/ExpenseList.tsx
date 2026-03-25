@@ -110,7 +110,7 @@ export default function ExpenseList() {
           {
             key: "amount",
             header: "Amount",
-            render: (item) => (item.amount != null ? `₹${item.amount}` : "—"),
+            render: (item) => (item.amount != null ? `$${parseFloat(item.amount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "—"),
           },
           {
             key: "description",

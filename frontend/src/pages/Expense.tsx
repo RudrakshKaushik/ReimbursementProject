@@ -130,7 +130,7 @@ export default function Expense() {
             key: "amount",
             header: "Total Amount",
             render: (exp) =>
-              exp.total_amount != null ? `₹${exp.total_amount}` : "—",
+              exp.total_amount != null ? `$ ${exp.total_amount}` : "—",
           },
           {
             key: "status",

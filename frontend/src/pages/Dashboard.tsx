@@ -226,7 +226,7 @@ export default function Dashboard() {
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={exp.status} /></td>
                       <td className="px-4 py-3 font-bold tabular-nums text-emerald-600">
-                        ₹{parseFloat(exp.total_amount).toLocaleString("en-IN", {
+                        ${parseFloat(exp.total_amount).toLocaleString("en-IN", {
                           maximumFractionDigits: 2,
                         })}
                       </td>
@@ -288,7 +288,7 @@ export default function Dashboard() {
                       <td className="max-w-[220px] truncate px-4 py-3 text-gray-700">{item.description || "—"}</td>
                       <td className="px-4 py-3 text-sm text-gray-400">{item.vendor || "—"}</td>
                       <td className="px-4 py-3 font-bold tabular-nums text-emerald-600">
-                        ₹{parseFloat(item.amount).toLocaleString("en-IN", {
+                        ${parseFloat(item.amount).toLocaleString("en-IN", {
                           maximumFractionDigits: 2,
                         })}
                       </td>
