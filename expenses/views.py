@@ -140,7 +140,7 @@ def login_api(request):
     Login API accepts email and password,
     verifies against Django auth system,
     returns success/fail and redirect URL.
-    """
+    """ 
     email = request.data.get("email")
     password = request.data.get("password")
 
@@ -150,34 +150,32 @@ def login_api(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Authenticate via Django user
-    # Try to find a user with this email first since standard authenticate()
-    # matches username field but we have email from frontend.
     try:
         user_with_email = User.objects.get(email=email)
         username = user_with_email.username
     except User.DoesNotExist:
-        # If not found, fall back to whatever was provided as username
         username = email
 
     user = authenticate(username=username, password=password)
 
     if user is None:
         return Response({"error": "Invalid credentials"}, status=400)
-    
-    token, _ = Token.objects.get_or_create(user=user)
 
+    # 🔥 Role logic
+    role = "admin" if user.is_superuser else "user"
+
+    token, _ = Token.objects.get_or_create(user=user)
     django_login(request, user)
-    
+
     return Response({
         "token": token.key,
         "user_id": user.id,
         "username": user.username,
+        "role": role,  # ✅ added role here
         "success": True,
         "message": "Login successful",
         "redirect_url": "/dashboard"
     }, status=status.HTTP_200_OK)
-
    
 
 
@@ -185,7 +183,7 @@ def login_api(request):
 # Dashboard API
 # -----------------------------
 @api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([AllowAny])
 def dashboard_api(request):
     """
     Dashboard API for logged-in user.
@@ -273,6 +271,7 @@ def dashboard_expenses(request):
 def dashboard_expense_list(request):
     """
     Returns expense line items for the logged-in employee
+    with approval flag
     """
 
     user = request.user
@@ -285,16 +284,32 @@ def dashboard_expense_list(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    # Query expense line items belonging to this employee
-    expense_list = ExpenseLineItem.objects.filter(
+    expense_list = ExpenseLineItem.objects.select_related(
+        "expense_record"
+    ).filter(
         expense_record__employee__email=user.email
     )
+
+    data = []
+
+    for item in expense_list:
+        data.append({
+            "id": item.id,
+            "description": item.description,
+            "amount": float(item.amount),
+            "category": item.category,
+            "date": item.date,
+            "vendor": item.vendor,
+
+            # ✅ NEW FIELD
+            "approval_status": item.expense_record.status
+        })
 
     return Response({
         "success": True,
         "employee_email": user.email,
-        "total_items": expense_list.count(),
-        "expense_list": ExpenseLineItemSerializer(expense_list, many=True).data
+        "total_items": len(data),
+        "expense_list": data
     })
 
 @csrf_exempt
@@ -363,7 +378,7 @@ Your task:
    - Total bill amount (amount)
    - Currency in ISO-4217 code
    - Bill Date (only date)
-   - Vendor / merchant name and any useful extra info (additional info)
+   - Vendor / merchant name 
 
 Return ONLY valid JSON.
 Return a raw JSON object, not a string.
@@ -417,7 +432,7 @@ Return JSON strictly in the following structure:
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": ""
+                    "x-goog-api-key": "AIzaSyC6zpASBbZQFGtZtJA_erbkFQU8oKmCFdk"
                 },
                 data=json.dumps(request_body)
             )
@@ -605,4 +620,135 @@ def approval_api(request):
                 "details": str(e)
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def my_approvals_api(request):
+    try:
+        employee = Employee.objects.get(email=request.user.email)
+    except Employee.DoesNotExist:
+        return Response({"error": "Employee not found"}, status=404)
+
+    approvals = Approval.objects.filter(approver=employee)
+
+    data = []
+
+    for approval in approvals:
+        data.append({
+            "id": approval.id,
+            "expense_record_id": approval.expense_record.id,
+            "employee": approval.expense_record.employee.name,
+            "status": approval.status,
+        })
+
+    return Response({
+        "success": True,
+        "approvals": data
+    })
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def approval_rules_api(request):
+    """
+    Fetch all approval rules from DB (created via admin)
+    """
+
+    rules = ApprovalRule.objects.all()   # 👈 gets everything from admin table
+
+    return Response({
+        "success": True,
+        "total_rules": rules.count(),
+        "rules": ApprovalRuleSerializer(rules, many=True).data
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def all_approvals_api(request):
+    """
+    Returns all approvals in the system (admin only)
+    """
+
+    # 🔒 Restrict to admin/staff
+    if not request.user.is_staff:
+        return Response(
+            {"error": "Only admin can view all approvals"},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    approvals = Approval.objects.select_related(
+        "expense_record", "approver", "expense_record__employee"
+    ).all().order_by("-id")
+
+    data = []
+
+    for approval in approvals:
+        data.append({
+            "approval_id": approval.id,
+            "expense_record_id": approval.expense_record.id,
+
+            # ✅ ADD THIS LINE
+            "employee_id": approval.expense_record.employee.id,
+
+            "employee_name": approval.expense_record.employee.name,
+            "approver_name": approval.approver.name,
+            "status": approval.status,
+            "comments": approval.comments,
+            "approved_at": approval.approved_at,
+        })
+
+    return Response({
+        "success": True,
+        "total_approvals": approvals.count(),
+        "approvals": data
+    }, status=status.HTTP_200_OK)
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+@api_view(["PATCH", "PUT"])
+@permission_classes([IsAuthenticated])
+def update_expense_line_item(request, pk):
+    try:
+        # 🔹 Get line item
+        line_item = ExpenseLineItem.objects.select_related(
+            "expense_record__employee"
+        ).get(id=pk)
+
+        # 🔒 Ownership check
+        employee = line_item.expense_record.employee
+
+        if employee.email != request.user.email:
+            return Response(
+                {"error": "You are not allowed to edit this expense"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 🔹 Update
+        serializer = ExpenseLineItemSerializer(
+            line_item,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save(is_edited=True)  # optional tracking
+
+            return Response({
+                "message": "Line item updated successfully",
+                "data": serializer.data
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    except ExpenseLineItem.DoesNotExist:
+        return Response(
+            {"error": "Line item not found"},
+            status=status.HTTP_404_NOT_FOUND
         )

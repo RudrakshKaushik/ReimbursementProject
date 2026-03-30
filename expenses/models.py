@@ -118,6 +118,7 @@ class ExpenseLineItem(models.Model):
     category = models.CharField(max_length=100, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     vendor = models.CharField(max_length=255, blank=True)
+    is_approved = models.BooleanField(default=False)
     attachment = models.ForeignKey(
         Attachment,
         null=True,

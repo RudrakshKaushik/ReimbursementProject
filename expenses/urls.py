@@ -12,7 +12,11 @@ from .views import (
     dashboard_expenses,
     gemini_api,
     dashboard_expense_list,  
-    approval_api,                            # now exists in views.py
+    approval_api,
+    my_approvals_api,
+    approval_rules_api, 
+    update_expense_line_item,
+    all_approvals_api,                                                                                                              # now exists in views.py
 )
 
 # Create a router and register all viewsets
@@ -32,5 +36,10 @@ urlpatterns = [
     path("dashboard/expenselist/", dashboard_expense_list, name="dashboard_expense_list"),
     path("gemini/", gemini_api, name="gemini_api"),
     path("approval_api/", approval_api, name="approval_api"),
+    path("my_approvals_api/", my_approvals_api, name="my_approvals_api"),
+    path("approval_rules_api/", approval_rules_api, name="approval_rules_api"),
+     path("all_approvals_api/", all_approvals_api, name="all_approvals_api"),
+    path("update_expense_line_item/<int:pk>/", update_expense_line_item, name="update_expense_line_item"),
+    
     path("", include(router.urls)),               # all other viewsets
 ]
