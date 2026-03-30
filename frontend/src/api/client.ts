@@ -8,6 +8,10 @@ import type {
   ApprovalApiResponse,
   LoginErrorResponse,
   LoginResponse,
+  MyApprovalsResponse,
+  ApprovalRulesResponse,
+  AllApprovalsResponse,
+  ExpenseLineItemUpdatePayload,
 } from "../types";
 
 export * from "../types";
@@ -17,6 +21,8 @@ const envApiUrl =
   import.meta.env.VITE_API_URL;
 
 const AUTH_COOKIE_NAME = "auth_token";
+const AUTH_ROLE_STORAGE_KEY = "auth_role";
+const AUTH_USERNAME_STORAGE_KEY = "auth_username";
 
 function setAuthTokenCookie(token: string) {
   document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
@@ -36,6 +42,60 @@ function getAuthTokenFromCookie(): string | null {
 
 function getAuthToken(): string | null {
   return getAuthTokenFromCookie();
+}
+
+export function getAuthRole(): string | null {
+  try {
+    return localStorage.getItem(AUTH_ROLE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function isAdminUser(): boolean {
+  return getAuthRole()?.toLowerCase() === "admin";
+}
+
+function setAuthRole(role: string) {
+  try {
+    localStorage.setItem(AUTH_ROLE_STORAGE_KEY, role);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function clearAuthRole() {
+  try {
+    localStorage.removeItem(AUTH_ROLE_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Mirrors login API `username` (Django `user.username`). */
+export function getAuthUsername(): string | null {
+  try {
+    const v = localStorage.getItem(AUTH_USERNAME_STORAGE_KEY);
+    return v != null && v !== "" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function setAuthUsernameFromLogin(username: string) {
+  try {
+    localStorage.setItem(AUTH_USERNAME_STORAGE_KEY, username);
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearAuthUsername() {
+  try {
+    localStorage.removeItem(AUTH_USERNAME_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 const api = axios.create({
@@ -103,6 +163,29 @@ export async function fetchDashboard(): Promise<DashboardData> {
   return response.data;
 }
 
+export async function fetchMyApprovals(): Promise<MyApprovalsResponse> {
+  const response = await api.get<MyApprovalsResponse>("/my_approvals_api/");
+  return response.data;
+}
+
+export async function fetchApprovalRules(): Promise<ApprovalRulesResponse> {
+  const response = await api.get<ApprovalRulesResponse>("/approval_rules_api/");
+  return response.data;
+}
+
+export async function fetchAllApprovals(): Promise<AllApprovalsResponse> {
+  const response = await api.get<AllApprovalsResponse>("/all_approvals_api/");
+  return response.data;
+}
+
+export async function updateExpenseLineItem(
+  pk: number | string,
+  data: ExpenseLineItemUpdatePayload,
+): Promise<{ message?: string; data?: unknown }> {
+  const response = await api.patch(`/update_expense_line_item/${pk}/`, data);
+  return response.data;
+}
+
 export async function checkAuth(): Promise<boolean> {
   if (getAuthToken()) return true;
   try {
@@ -122,6 +205,13 @@ export async function login(email: string, password: string): Promise<LoginRespo
     if (response.data.success) {
       setAuthTokenCookie(response.data.token);
       api.defaults.headers.common.Authorization = `Token ${response.data.token}`;
+      if (typeof response.data.role === "string") {
+        setAuthRole(response.data.role);
+      }
+      const uname = response.data.username;
+      if (typeof uname === "string" && uname.trim() !== "") {
+        setAuthUsernameFromLogin(uname.trim());
+      }
     }
     return response.data;
   } catch (err) {
@@ -142,6 +232,8 @@ export async function login(email: string, password: string): Promise<LoginRespo
 
 export function logout() {
   clearAuthTokenCookie();
+  clearAuthRole();
+  clearAuthUsername();
   delete api.defaults.headers.common.Authorization;
 }
 

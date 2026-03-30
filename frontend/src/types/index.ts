@@ -37,6 +37,9 @@ export type LoginSuccessResponse = {
   success: true;
   message: string;
   user_id: number;
+  username: string;
+  /** e.g. `"admin"` — controls approval UI visibility */
+  role: string;
   redirect_url: string;
 };
 
@@ -78,10 +81,15 @@ export type ExpenseLineItemEntry = {
   description: string;
   date: string;
   category: string;
-  amount: string;
+  /** API may return number or string */
+  amount: string | number;
   vendor: string;
   attachment?: AttachmentInfo;
-  created_at: string;
+  created_at?: string;
+  /** Final approval flag — independent of `approval_status` workflow text */
+  is_approved?: boolean;
+  /** Workflow / queue label (e.g. pending) — not the same as `is_approved` */
+  approval_status?: string;
 };
 
 export type ExpenseListItem = {
@@ -124,4 +132,57 @@ export type DashboardData = {
   expenses: DashboardExpense[];
   expense_list: ExpenseLineItemEntry[];
   sections: string[];
+};
+
+export type MyApprovalRow = {
+  id: number;
+  expense_record_id: number;
+  employee: string;
+  status: string;
+};
+
+export type MyApprovalsResponse = {
+  success: boolean;
+  approvals: MyApprovalRow[];
+};
+
+export type ApprovalRuleRow = {
+  id: number;
+  name: string;
+  min_amount: string;
+  max_amount: string;
+  approver: number;
+  is_active: boolean;
+};
+
+export type ApprovalRulesResponse = {
+  success: boolean;
+  total_rules: number;
+  rules: ApprovalRuleRow[];
+};
+
+export type AllApprovalRow = {
+  approval_id: number;
+  expense_record_id: number;
+  employee_id: number;
+  employee_name: string;
+  approver_name: string;
+  status: string;
+  comments: string | null;
+  approved_at: string | null;
+};
+
+export type AllApprovalsResponse = {
+  success: boolean;
+  total_approvals: number;
+  approvals: AllApprovalRow[];
+};
+
+/** PATCH body for `update_expense_line_item` (partial) */
+export type ExpenseLineItemUpdatePayload = {
+  description?: string;
+  date?: string;
+  category?: string;
+  amount?: number | string;
+  vendor?: string;
 };

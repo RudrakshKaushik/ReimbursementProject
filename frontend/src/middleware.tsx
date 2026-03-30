@@ -2,6 +2,7 @@ import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import Login from "./pages/Login";
 import { useAuth } from "@context/AuthContext";
+import { isAdminUser } from "@/api/client";
 
 function LoadingRoute() {
   return (
@@ -27,6 +28,14 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
 
+  return children;
+}
+
+/** Must be used inside `RequireAuth`. Sends non-admins to the dashboard. */
+export function RequireAdmin({ children }: { children: React.ReactNode }) {
+  if (!isAdminUser()) {
+    return <Navigate to="/dashboard" replace />;
+  }
   return children;
 }
 

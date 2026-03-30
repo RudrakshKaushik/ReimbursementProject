@@ -153,8 +153,8 @@ function ExpenseRecord() {
           {record.status === "approved"
             ? "Approved"
             : approving
-              ? "Approving..."
-              : "Approve"}
+              ? "Submitting..."
+              : "Submit For Approval"}
         </button>
       </div>
 

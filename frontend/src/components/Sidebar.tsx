@@ -5,6 +5,9 @@ import {
   IconUsers,
   IconFolder,
   IconReceipt,
+  IconClipboardList,
+  IconAdjustmentsHorizontal,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 
 type NavItem = {
@@ -23,12 +26,33 @@ const ALL_NAV_ITEMS: NavItem[] = [
     path: "/expense-list",
     icon: IconReceipt,
   },
+  {
+    key: "approvals_hub",
+    label: "My approvals",
+    path: "/approvals",
+    icon: IconClipboardList,
+  },
+  {
+    key: "approval_rules",
+    label: "Approval rules",
+    path: "/approval-rules",
+    icon: IconAdjustmentsHorizontal,
+  },
+  {
+    key: "all_approvals",
+    label: "All approvals",
+    path: "/all-approvals",
+    icon: IconShieldCheck,
+  },
 ];
 
 type SidebarProps = {
   hasEmployee: boolean;
   hasExpenses: boolean;
   hasExpenseList: boolean;
+  hasApprovalsHub: boolean;
+  hasApprovalRules: boolean;
+  hasAllApprovals: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
 };
@@ -37,6 +61,9 @@ export function Sidebar({
   hasEmployee,
   hasExpenses,
   hasExpenseList,
+  hasApprovalsHub,
+  hasApprovalRules,
+  hasAllApprovals,
   collapsed,
   onToggleCollapse,
 }: SidebarProps) {
@@ -45,6 +72,9 @@ export function Sidebar({
     if (item.key === "employee") return hasEmployee;
     if (item.key === "expenses") return hasExpenses;
     if (item.key === "expense_list") return hasExpenseList;
+    if (item.key === "approvals_hub") return hasApprovalsHub;
+    if (item.key === "approval_rules") return hasApprovalRules;
+    if (item.key === "all_approvals") return hasAllApprovals;
     return false;
   });
 

@@ -1,16 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { Routes, Route, Outlet, useNavigate, Navigate } from "react-router-dom";
-import { RequireAuth, LoginRoute } from "@/middleware";
+import { RequireAuth, RequireAdmin, LoginRoute } from "@/middleware";
 import { AuthProvider, useAuth } from "@context/AuthContext";
 import { Sidebar } from "@/components/Sidebar";
 import { AppHeader } from "@/components/AppHeader";
-import { fetchDashboard, logout } from "@/api/client";
+import { fetchDashboard, logout, isAdminUser } from "@/api/client";
+import type { DashboardData } from "@/types";
 import Dashboard from "@/pages/Dashboard";
 import Employee from "@/pages/Employee";
 import Expense from "@/pages/Expense";
 import ExpenseList from "@/pages/ExpenseList";
 import ExpenseRecord from "@/pages/ExpenseRecord";
+import ApprovalsHub from "@/pages/ApprovalsHub";
+import ApprovalRules from "@/pages/ApprovalRules";
+import AllApprovals from "@/pages/AllApprovals";
 import NotFound from "@/pages/NotFound";
+
+/** `sections` labels from `dashboard_api` (expenses/views.py) that map to sidebar routes */
+const DASHBOARD_SECTION = {
+  employees: "Employees",
+  expenseRecords: "Expense records",
+  expenseLineItems: "Expense line items",
+} as const;
 
 function AppLayout() {
   const navigate = useNavigate();
@@ -20,19 +31,30 @@ function AppLayout() {
     hasEmployee: boolean;
     hasExpenses: boolean;
     hasExpenseList: boolean;
+    hasApprovalsHub: boolean;
+    hasApprovalRules: boolean;
+    hasAllApprovals: boolean;
   }>({
     hasEmployee: false,
     hasExpenses: false,
     hasExpenseList: false,
+    hasApprovalsHub: false,
+    hasApprovalRules: false,
+    hasAllApprovals: false,
   });
 
   useEffect(() => {
     fetchDashboard()
-      .then((data) => {
+      .then((data: DashboardData) => {
+        const sections = Array.isArray(data.sections) ? data.sections : [];
+        const isAdmin = isAdminUser();
         setSidebarState({
-          hasEmployee: Boolean((data as any).employee),
-          hasExpenses: Array.isArray((data as any).expenses),
-          hasExpenseList: Array.isArray((data as any).expense_list),
+          hasEmployee: sections.includes(DASHBOARD_SECTION.employees),
+          hasExpenses: sections.includes(DASHBOARD_SECTION.expenseRecords),
+          hasExpenseList: sections.includes(DASHBOARD_SECTION.expenseLineItems),
+          hasApprovalsHub: true,
+          hasApprovalRules: isAdmin,
+          hasAllApprovals: isAdmin,
         });
       })
       .catch(() => {
@@ -40,6 +62,9 @@ function AppLayout() {
           hasEmployee: false,
           hasExpenses: false,
           hasExpenseList: false,
+          hasApprovalsHub: true,
+          hasApprovalRules: false,
+          hasAllApprovals: false,
         });
       });
   }, []);
@@ -56,6 +81,9 @@ function AppLayout() {
         hasEmployee={sidebarState.hasEmployee}
         hasExpenses={sidebarState.hasExpenses}
         hasExpenseList={sidebarState.hasExpenseList}
+        hasApprovalsHub={sidebarState.hasApprovalsHub}
+        hasApprovalRules={sidebarState.hasApprovalRules}
+        hasAllApprovals={sidebarState.hasAllApprovals}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
       />
@@ -90,6 +118,23 @@ function App() {
               <Route path="/expense" element={<Expense />} />
               <Route path="/expense-list" element={<ExpenseList />} />
               <Route path="/expense-records/:id" element={<ExpenseRecord />} />
+              <Route path="/approvals" element={<ApprovalsHub />} />
+              <Route
+                path="/approval-rules"
+                element={
+                  <RequireAdmin>
+                    <ApprovalRules />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/all-approvals"
+                element={
+                  <RequireAdmin>
+                    <AllApprovals />
+                  </RequireAdmin>
+                }
+              />
             </Route>
 
             <Route path="*" element={<NotFound />} />

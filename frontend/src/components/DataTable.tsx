@@ -17,6 +17,8 @@ export interface DataTableProps<T> {
   getRowKey: (row: T) => string | number;
   footer?: React.ReactNode;
   minWidth?: string;
+  /** Extra classes per row (e.g. highlight selected or approved rows). */
+  rowClassName?: (row: T, rowIndex: number) => string | undefined;
   /**
    * Shown when `data` is empty.
    * Keep it generic; pages can override if needed.
@@ -30,6 +32,7 @@ export function DataTable<T = unknown>({
   getRowKey,
   footer,
   minWidth = "640px",
+  rowClassName,
   emptyMessage = "No records found.",
 }: DataTableProps<T>) {
   if (data.length === 0) {
@@ -67,7 +70,11 @@ export function DataTable<T = unknown>({
             {data.map((row, idx) => (
               <tr
                 key={String(getRowKey(row))}
-                className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50"
+                className={
+                  rowClassName
+                    ? `border-b last:border-b-0 ${rowClassName(row, idx) ?? ""}`
+                    : "border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50"
+                }
               >
                 {columns.map((col) => (
                   <td
