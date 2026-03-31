@@ -1,7 +1,7 @@
 import React from "react";
 
 const dotBase =
-  "inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle shadow-sm ring-2 ring-black/5";
+  "inline-block h-3.5 w-3.5 shrink-0 rounded-full align-middle shadow-sm ring-2 ring-black/5";
 
 const tooltipPanel =
   "pointer-events-none absolute bottom-full left-1/2 z-[100] mb-1.5 max-w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 whitespace-normal rounded-md bg-gray-900 px-2 py-1.5 text-left text-xs font-medium leading-snug text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100";
@@ -108,22 +108,14 @@ export function LineItemApprovedBadge({
       />
     );
   }
-  if (isApproved === false) {
-    return (
-      <StatusDot
-        className="bg-red-500"
-        title="Pending"
-        label="Pending"
-      />
-    );
-  }
   return (
     <StatusDot
-      className="bg-slate-300"
-      title="Unknown"
-      label="Approval unknown"
+      className="bg-red-500"
+      title="Pending"
+      label="Pending"
     />
   );
+
 }
 
 /**

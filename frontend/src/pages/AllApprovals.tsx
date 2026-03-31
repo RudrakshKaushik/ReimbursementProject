@@ -5,6 +5,7 @@ import type { AllApprovalsResponse, AllApprovalRow } from "@/types";
 import { DataTable } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
 import { ApprovalRecordStatusBadge } from "@/components/ApprovalBadges";
+import { formatDisplayDate } from "@/utils/date";
 
 const PAGE_SIZE = 10;
 
@@ -119,7 +120,7 @@ export default function AllApprovals() {
           {
             key: "approved_at",
             header: "Approved at",
-            render: (row) => (row.approved_at ? row.approved_at : "—"),
+            render: (row) => formatDisplayDate(row.approved_at),
           },
         ]}
         data={paginatedRows}

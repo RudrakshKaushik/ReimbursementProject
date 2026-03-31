@@ -6,6 +6,7 @@ import type { ExpenseLineItemListResponse, ExpenseLineItemEntry } from "@/types"
 import { DataTable } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
 import { EditExpenseLineItemModal } from "@/components/EditExpenseLineItemModal";
+import { formatDisplayDate } from "@/utils/date";
 import {
   WorkflowApprovalStatusBadge,
   LineItemApprovedBadge,
@@ -23,15 +24,6 @@ function axiosErrorMessage(err: unknown, fallback: string): string {
     return (msg as string) || fallback;
   }
   return fallback;
-}
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return "—";
-  try {
-    return new Date(dateStr).toLocaleDateString();
-  } catch {
-    return dateStr;
-  }
 }
 
 function truncate(str: string | undefined, maxLen = 60) {
@@ -149,7 +141,7 @@ export default function ExpenseList() {
           {
             key: "date",
             header: "Date",
-            render: (item) => formatDate(item.date),
+            render: (item) => formatDisplayDate(item.date),
           },
           {
             key: "approval_status",
