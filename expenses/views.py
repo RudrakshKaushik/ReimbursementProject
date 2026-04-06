@@ -312,6 +312,8 @@ def dashboard_expense_list(request):
         "expense_list": data
     })
 
+import re  # 🔥 ADD THIS AT TOP
+
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -321,11 +323,6 @@ def gemini_api(request):
 
         expense_record_id = data.get("expense_record_id")
         attachment_ids = data.get("attachment_ids")
-
-        print("🔥 API HIT")
-
-        print("expense_record_id:", expense_record_id)
-        print("attachment_ids:", attachment_ids)
 
         if not expense_record_id or not attachment_ids:
             return Response(
@@ -343,15 +340,19 @@ def gemini_api(request):
             try:
                 attachment = Attachment.objects.get(id=attachment_id)
             except Attachment.DoesNotExist:
-                continue  # skip invalid attachment
+                continue
 
-            # 🔥 Convert to base64
+            if not attachment.file_data:
+                print("❌ No file_data:", attachment_id)
+                continue
+
             base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
-            base64_data = base64_data.replace("\n", "").replace("\r", "")
-            PROMPT="""
-               You are an expert expense document analyzer.
 
-The uploaded image or document is a bill or receipt. The image can have multiple or duplicate bills so read details carefully. Each belongs to exactly one of these categories:
+            PROMPT = """
+You are an expert expense document analyzer.
+
+The uploaded image or document is a bill or receipt. The image may contain multiple or duplicate bills, so read details carefully. Each bill belongs to exactly one of the following categories:
+
 - Food and Beverages
 - Hotel/Accommodation
 - Flight Travel
@@ -368,35 +369,20 @@ The uploaded image or document is a bill or receipt. The image can have multiple
 - WFH setup
 - Phone and internet bill
 
-If it seems that above categories don't match with the doc, take the category as Miscellaneous.
-If it seems that there is no currency in the bill, take it as USD.
+If none match, use "Miscellaneous".
+If no currency, use "USD".
 
-Your task:
-1. Read the document carefully.
-2. Identify:
-   - Expense category (type)
-   - Total bill amount (amount)
-   - Currency in ISO-4217 code
-   - Bill Date (only date)
-   - Vendor / merchant name 
+Extract:
+- type
+- amount
+- currency
+- bill_date (YYYY-MM-DD)
+- additional_info (vendor)
 
-Return ONLY valid JSON.
-Return a raw JSON object, not a string.
-Do NOT wrap the output in quotes.
-Do NOT use markdown or ``` blocks.
-Do NOT escape characters.
+STRICT:
+Return ONLY JSON. No markdown. No explanation.
 
-If a value is NOT found in the bill, return an empty value:
-- string → ""
-- number → null
-- object → {}
-- array → []
-
-Do NOT omit any keys.
-Do NOT add extra keys.
-Do NOT include explanations, markdown, or extra text.
-
-Return JSON strictly in the following structure:
+FORMAT:
 {
   "bills": [
     {
@@ -409,7 +395,6 @@ Return JSON strictly in the following structure:
   ]
 }
 """
-
             request_body = {
                 "contents": [
                     {
@@ -432,49 +417,81 @@ Return JSON strictly in the following structure:
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": "AIzaSyC6zpASBbZQFGtZtJA_erbkFQU8oKmCFdk"
+                    "x-goog-api-key": "AIzaSyB9LzYLrzjYch4gSe0s4cKetI4LfEJ-yKk"
                 },
                 data=json.dumps(request_body)
             )
 
             response_json = response.json()
+            print("🔥 FULL GEMINI RESPONSE:", response_json)
+
+            # 🔴 Check if response is valid
+            if "candidates" not in response_json or not response_json["candidates"]:
+                print("❌ No candidates returned")
+                continue
+
+            gemini_text = ""
 
             try:
                 gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-                gemini_text = gemini_text.strip().replace("```json", "").replace("```", "")
-                parsed_data = json.loads(gemini_text)
 
-                bills = parsed_data.get("bills", [])
+                print("RAW TEXT:", gemini_text)
+
+                # 🔥 REMOVE MARKDOWN
+                gemini_text = gemini_text.replace("```json", "").replace("```", "").strip()
+
+                # 🔥 REGEX JSON EXTRACTION (MAIN FIX)
+                match = re.search(r"\{.*\}", gemini_text, re.DOTALL)
+
+                if not match:
+                    print("❌ No JSON found")
+                    continue
+
+                json_text = match.group(0)
+
+                parsed_data = json.loads(json_text)
+
+                print("PARSED:", parsed_data)
+
+                # 🔥 HANDLE BOTH CASES
+                if "bills" in parsed_data:
+                    bills = parsed_data["bills"]
+                elif "bill" in parsed_data:
+                    bills = [parsed_data["bill"]]
+                else:
+                    print("❌ No 'bills' key found")
+                    bills = []
+
                 total_bill_count += len(bills)
 
             except Exception as e:
-                continue  # skip this attachment if parsing fails
+                print("❌ PARSE ERROR:", str(e))
+                print("FAILED TEXT:", gemini_text)
+                continue
 
-            # 🔥 Create line items for each bill
+            # 🔥 CREATE LINE ITEMS
             for bill in bills:
 
-                # date parsing
-                bill_date = bill.get("bill_date")
                 try:
-                    bill_date = datetime.strptime(bill_date, "%Y-%m-%d").date() if bill_date else date.today()
+                    bill_date = datetime.strptime(
+                        bill.get("bill_date"), "%Y-%m-%d"
+                    ).date() if bill.get("bill_date") else date.today()
                 except:
                     bill_date = date.today()
 
-                # amount parsing
-                amount = bill.get("amount")
                 try:
-                    amount = Decimal(str(amount)) if amount else Decimal("0.00")
+                    amount = Decimal(str(bill.get("amount"))) if bill.get("amount") else Decimal("0.00")
                 except:
                     amount = Decimal("0.00")
 
                 line_item = ExpenseLineItem.objects.create(
                     expense_record=expense_record,
                     attachment=attachment,
-                    description=bill.get("additional_info", "")[:500],
+                    description=(bill.get("additional_info") or "")[:500],
                     date=bill_date,
-                    category=bill.get("type", ""),
+                    category=bill.get("type") or "",
                     amount=amount,
-                    vendor=bill.get("additional_info", "")[:255]
+                    vendor=(bill.get("additional_info") or "")[:255]
                 )
 
                 created_items.append(line_item.id)
@@ -532,49 +549,75 @@ def approval_api(request):
         for item in line_items:
             total_amount += item.amount
 
+            reasons = []
+
             # 🔥 Normalize category
             item_category = (item.category or "").strip().lower()
 
-            # 🔥 Match rule by category
             matched_rule = rules.filter(
                 name__iexact=item_category
             ).first()
 
-            # ❌ No matching rule
+            # ❌ No rule
             if not matched_rule:
+                reasons.append("No matching approval rule")
+            else:
+                approvers_set.add(matched_rule.approver)
+
+                # ✅ Rule 1: Bill older than 3 months
+                if item.date and item.date < three_months_ago:
+                    reasons.append("Policy Violation: Bill older than 3 months")
+
+                # ✅ Rule 2: Amount exceeds
+                if item.amount > matched_rule.max_amount:
+                    reasons.append(
+                        f"Policy Violation: Amount exceeds limit ({matched_rule.max_amount})"
+                    )
+
+            # ✅ Rule 3: Duplicate bill
+            duplicate_exists = ExpenseLineItem.objects.filter(
+                expense_record__employee=expense_record.employee,
+                amount=item.amount,
+                date=item.date,
+                vendor=item.vendor
+            ).exclude(id=item.id).exists()
+
+            if duplicate_exists:
+                reasons.append("Policy Violation: Duplicate bill detected")
+
+            # 🔥 SAVE TO DB (ONLY ONE FIELD)
+            if reasons:
+                item.violation_reason = " | ".join(reasons)
+                item.is_approved = False
+            else:
+                item.violation_reason = None
+                item.is_approved = True
+
+            item.save(update_fields=["violation_reason", "is_approved"])
+
+            # Collect for response
+            if reasons:
                 violations.append({
                     "line_item_id": item.id,
                     "amount": float(item.amount),
-                    "reason": "No matching approval rule"
-                })
-                continue
-
-            # ✅ Add approver from rule
-            approvers_set.add(matched_rule.approver)
-
-            # 1️⃣ Date check
-            if item.date and item.date < three_months_ago:
-                violations.append({
-                    "line_item_id": item.id,
-                    "amount": float(item.amount),
-                    "reason": "Bill older than 3 months"
+                    "reason": item.violation_reason
                 })
 
-            # 2️⃣ Amount check
-            if item.amount > matched_rule.max_amount:
-                violations.append({
-                    "line_item_id": item.id,
-                    "amount": float(item.amount),
-                    "reason": f"Amount exceeds max limit ({matched_rule.max_amount})"
-                })
+        # 🔥 FINAL DECISION
+        if violations:
+            approval_status = "ADMIN PENDING"
+            final_message = "Sent to manager for approval"
 
-            # (Optional) Min check
-           
+            expense_record.status = ExpenseRecord.STATUS_PENDING
+            expense_record.current_approver = expense_record.employee.manager
+        else:
+            approval_status = "APPROVED"
+            final_message = "Approved by system"
 
-        # 🔹 Final decision
-        approval_status = "ADMIN PENDING" if violations else "APPROVED"
+            expense_record.status = ExpenseRecord.STATUS_APPROVED
+            expense_record.current_approver = None
 
-        # 🔥 Create Approval for EACH approver
+        # 🔥 Create approvals
         created_approvals = []
 
         for approver in approvers_set:
@@ -584,24 +627,20 @@ def approval_api(request):
             )
 
             approval.status = approval_status
-            approval.comments = "Auto-evaluated by system"
+            approval.comments = final_message
             approval.approved_at = timezone.now()
             approval.save()
 
             created_approvals.append(approval.id)
 
-        # 🔹 Update ExpenseRecord
-        if approval_status == "APPROVED":
-            expense_record.status = ExpenseRecord.STATUS_APPROVED
-        else:
-            expense_record.status = ExpenseRecord.STATUS_PENDING
-
+        # 🔹 Save record
         expense_record.total_amount = total_amount
         expense_record.save()
 
         return Response({
             "expense_record_id": expense_record.id,
             "status": approval_status,
+            "message": final_message,
             "total_amount": float(total_amount),
             "violations": violations,
             "approvals_created": created_approvals
@@ -625,27 +664,40 @@ def approval_api(request):
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def my_approvals_api(request):
+    """
+    Returns approvals where approver = logged-in employee
+    """
+
     try:
         employee = Employee.objects.get(email=request.user.email)
     except Employee.DoesNotExist:
-        return Response({"error": "Employee not found"}, status=404)
+        return Response(
+            {"error": "Employee not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
-    approvals = Approval.objects.filter(approver=employee)
+    # 🔥 MAIN FILTER
+    approvals = Approval.objects.select_related(
+        "expense_record", "expense_record__employee"
+    ).filter(approver=employee).order_by("-id")
 
     data = []
 
     for approval in approvals:
         data.append({
-            "id": approval.id,
+            "approval_id": approval.id,
             "expense_record_id": approval.expense_record.id,
-            "employee": approval.expense_record.employee.name,
+            "employee_name": approval.expense_record.employee.name,
             "status": approval.status,
+            "comments": approval.comments,
+            "approved_at": approval.approved_at,
         })
 
     return Response({
         "success": True,
+        "total_approvals": approvals.count(),
         "approvals": data
-    })
+    }, status=status.HTTP_200_OK)
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])

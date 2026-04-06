@@ -48,6 +48,7 @@ class ExpenseLineItemAdmin(admin.ModelAdmin):
         "amount",
         "category",
         "vendor",
+        "violation_reason",
         "is_approved",   # 👈 ADDED
     )
     list_filter = (
@@ -65,7 +66,8 @@ class ExpenseLineItemAdmin(admin.ModelAdmin):
         "amount",
         "category",
         "vendor",
-        "is_approved",   # 👈 ADDED
+        "is_approved",
+        "violation_reason",   # 👈 ADDED
         "attachment",
     )
 
