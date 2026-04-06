@@ -17,18 +17,10 @@ function axiosErrorMessage(err: unknown, fallback: string): string {
 
 type EditFormState = {
   description: string;
-  amount: string;
-  category: string;
-  vendor: string;
-  date: string;
 };
 
 const emptyForm = (): EditFormState => ({
   description: "",
-  amount: "",
-  category: "",
-  vendor: "",
-  date: "",
 });
 
 export type EditExpenseLineItemModalProps = {
@@ -51,11 +43,6 @@ export function EditExpenseLineItemModal({
     if (!item) return;
     setForm({
       description: item.description ?? "",
-      amount:
-        item.amount != null && item.amount !== "" ? String(item.amount) : "",
-      category: item.category ?? "",
-      vendor: item.vendor ?? "",
-      date: item.date ?? "",
     });
     setSaveError(null);
   }, [item]);
@@ -76,32 +63,19 @@ export function EditExpenseLineItemModal({
 
   if (!item) return null;
 
+  const lineItemId = item.id;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const amountTrim = form.amount.trim();
-    let amountPayload: number | undefined;
-    if (amountTrim !== "") {
-      const n = parseFloat(amountTrim);
-      if (Number.isNaN(n)) {
-        setSaveError("Amount must be a valid number.");
-        return;
-      }
-      amountPayload = n;
-    }
-
     const payload: ExpenseLineItemUpdatePayload = {
       description: form.description,
-      category: form.category,
-      vendor: form.vendor,
-      date: form.date.trim() || undefined,
     };
-    if (amountPayload !== undefined) payload.amount = amountPayload;
 
     try {
       setSaving(true);
       setSaveError(null);
-      await updateExpenseLineItem(item.id, payload);
+      await updateExpenseLineItem(lineItemId, payload);
       await onSuccess();
       onClose();
     } catch (err) {
@@ -130,7 +104,7 @@ export function EditExpenseLineItemModal({
           Edit expense line item
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Line item #{item.id} — all fields optional for partial update.
+          Line item #{item.id} — update the description.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -142,52 +116,6 @@ export function EditExpenseLineItemModal({
                 setForm((f) => ({ ...f, description: e.target.value }))
               }
               rows={3}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-gray-700">
-            Amount
-            <input
-              type="text"
-              inputMode="decimal"
-              value={form.amount}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, amount: e.target.value }))
-              }
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-gray-700">
-            Category
-            <input
-              type="text"
-              value={form.category}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, category: e.target.value }))
-              }
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-gray-700">
-            Vendor
-            <input
-              type="text"
-              value={form.vendor}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, vendor: e.target.value }))
-              }
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-gray-700">
-            Date (YYYY-MM-DD)
-            <input
-              type="text"
-              value={form.date}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, date: e.target.value }))
-              }
-              placeholder="2026-03-30"
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </label>

@@ -300,6 +300,7 @@ def dashboard_expense_list(request):
             "category": item.category,
             "date": item.date,
             "vendor": item.vendor,
+            "violation_reason": item.violation_reason,
 
             # ✅ NEW FIELD
             "approval_status": item.expense_record.status

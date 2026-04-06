@@ -160,6 +160,25 @@ export default function ExpenseList() {
             ),
           },
           {
+            key: "violation_reason",
+            header: "Violation",
+            render: (item) => {
+              const v = item.violation_reason?.trim();
+              if (!v) {
+                return <span className="text-gray-400">—</span>;
+              }
+              return (
+                <span
+                  className="block max-w-[220px] text-sm text-amber-900"
+                  title={v}
+                >
+                  {truncate(v, 72)}
+                </span>
+              );
+            },
+            cellClassName: "max-w-[240px]",
+          },
+          {
             key: "attachment",
             header: "Attachment",
             align: "right",
@@ -209,7 +228,7 @@ export default function ExpenseList() {
             onPageChange={setCurrentPage}
           />
         }
-        minWidth="800px"
+        minWidth="960px"
       />
 
       <EditExpenseLineItemModal

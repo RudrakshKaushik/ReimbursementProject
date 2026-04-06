@@ -144,18 +144,20 @@ function ExpenseRecord() {
       )}
 
       <div className="mt-6">
-        <button
-          type="button"
-          disabled={record.status === "approved" || approving}
-          onClick={handleApprove}
-          className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-default disabled:bg-gray-400"
-        >
-          {record.status === "approved"
-            ? "Approved"
-            : approving
-              ? "Submitting..."
-              : "Submit For Approval"}
-        </button>
+        {record.status === "approved" ? (
+          <p className="text-green-600 font-medium">
+            This Expense is already approved ✅
+          </p>
+        ) : (
+          <button
+            type="button"
+            disabled={approving}
+            onClick={handleApprove}
+            className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-default disabled:bg-gray-400"
+          >
+            {approving ? "Submitting..." : "Submit For Approval"}
+          </button>
+        )}
       </div>
 
       {approveError && (

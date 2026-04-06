@@ -90,6 +90,8 @@ export type ExpenseLineItemEntry = {
   is_approved?: boolean;
   /** Workflow / queue label (e.g. pending) — not the same as `is_approved` */
   approval_status?: string;
+  /** Rule / policy message when a line item fails validation (dashboard API) */
+  violation_reason?: string | null;
 };
 
 export type ExpenseListItem = {
