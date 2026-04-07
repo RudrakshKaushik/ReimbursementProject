@@ -16,7 +16,8 @@ from .views import (
     my_approvals_api,
     approval_rules_api, 
     update_expense_line_item,
-    all_approvals_api,                                                                                                              # now exists in views.py
+    all_approvals_api,  
+    expense_line_items_by_record,                                                                                                                                                                                                                        # now exists in views.py
 )
 
 # Create a router and register all viewsets
@@ -40,6 +41,11 @@ urlpatterns = [
     path("approval_rules_api/", approval_rules_api, name="approval_rules_api"),
      path("all_approvals_api/", all_approvals_api, name="all_approvals_api"),
     path("update_expense_line_item/<int:pk>/", update_expense_line_item, name="update_expense_line_item"),
+    path(
+    "expense-record/<int:expense_record_id>/line-items/",
+    expense_line_items_by_record,
+    name="expense-line-items-by-record"
+),
     
     path("", include(router.urls)),               # all other viewsets
 ]

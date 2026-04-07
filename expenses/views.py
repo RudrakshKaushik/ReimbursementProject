@@ -313,17 +313,41 @@ def dashboard_expense_list(request):
         "expense_list": data
     })
 
-import re  # 🔥 ADD THIS AT TOP
+import base64
+import json
+import requests
+import os
+
+from datetime import datetime, date
+from decimal import Decimal
+
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from .models import ExpenseRecord, Attachment, ExpenseLineItem
+
 
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def gemini_api(request):
     try:
+        import re
+
         data = request.data
 
         expense_record_id = data.get("expense_record_id")
         attachment_ids = data.get("attachment_ids")
+
+        print("🔥 API HIT")
+        print("expense_record_id:", expense_record_id)
+        print("attachment_ids:", attachment_ids)
 
         if not expense_record_id or not attachment_ids:
             return Response(
@@ -336,54 +360,10 @@ def gemini_api(request):
         created_items = []
         total_bill_count = 0
 
-        for attachment_id in attachment_ids:
-
-            try:
-                attachment = Attachment.objects.get(id=attachment_id)
-            except Attachment.DoesNotExist:
-                continue
-
-            if not attachment.file_data:
-                print("❌ No file_data:", attachment_id)
-                continue
-
-            base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
-
-            PROMPT = """
+        PROMPT = """
 You are an expert expense document analyzer.
 
-The uploaded image or document is a bill or receipt. The image may contain multiple or duplicate bills, so read details carefully. Each bill belongs to exactly one of the following categories:
-
-- Food and Beverages
-- Hotel/Accommodation
-- Flight Travel
-- Office supplies
-- Medical expenses
-- Training cost
-- Petrol/Diesel bill
-- Gas fuel
-- Parking charges
-- Car rental
-- Train Travel
-- Courier charges
-- Relocation expenses
-- WFH setup
-- Phone and internet bill
-
-If none match, use "Miscellaneous".
-If no currency, use "USD".
-
-Extract:
-- type
-- amount
-- currency
-- bill_date (YYYY-MM-DD)
-- additional_info (vendor)
-
-STRICT:
-Return ONLY JSON. No markdown. No explanation.
-
-FORMAT:
+Return ONLY valid JSON:
 {
   "bills": [
     {
@@ -396,13 +376,43 @@ FORMAT:
   ]
 }
 """
+
+        for attachment_id in attachment_ids:
+
+            try:
+                attachment = Attachment.objects.get(id=attachment_id)
+            except Attachment.DoesNotExist:
+                continue
+
+            # 🔥 Base64
+            base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
+
+            # 🔥 MIME TYPE
+            file_name = getattr(attachment, "file_name", "file.jpg")
+            ext = file_name.split(".")[-1].lower() if "." in file_name else ""
+
+            mime_map = {
+                "pdf": "application/pdf",
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "png": "image/png",
+                "doc": "application/msword",
+                "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "xls": "application/vnd.ms-excel",
+                "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }
+
+            mime_type = mime_map.get(ext, "application/octet-stream")
+
+            print("📄 Processing:", file_name, "| MIME:", mime_type)
+
             request_body = {
                 "contents": [
                     {
                         "parts": [
                             {
                                 "inline_data": {
-                                    "mime_type": "image/jpeg",
+                                    "mime_type": mime_type,
                                     "data": base64_data
                                 }
                             },
@@ -418,56 +428,43 @@ FORMAT:
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": "AIzaSyB9LzYLrzjYch4gSe0s4cKetI4LfEJ-yKk"
+                    "x-goog-api-key": "AIzaSyAN65bmsu8UgH7z-9bwkF6Zn51mogk76fs"
                 },
                 data=json.dumps(request_body)
             )
 
             response_json = response.json()
-            print("🔥 FULL GEMINI RESPONSE:", response_json)
+            print("📥 Gemini Raw Response:", response_json)
 
-            # 🔴 Check if response is valid
-            if "candidates" not in response_json or not response_json["candidates"]:
-                print("❌ No candidates returned")
+            # ✅ HANDLE API ERROR
+            if "error" in response_json:
+                print("❌ Gemini API Error:", response_json["error"]["message"])
                 continue
 
-            gemini_text = ""
-
+            # 🔥 FIXED PARSING
             try:
-                gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-
-                print("RAW TEXT:", gemini_text)
-
-                # 🔥 REMOVE MARKDOWN
-                gemini_text = gemini_text.replace("```json", "").replace("```", "").strip()
-
-                # 🔥 REGEX JSON EXTRACTION (MAIN FIX)
-                match = re.search(r"\{.*\}", gemini_text, re.DOTALL)
-
-                if not match:
-                    print("❌ No JSON found")
+                candidates = response_json.get("candidates", [])
+                if not candidates:
+                    print("❌ No candidates returned")
                     continue
 
-                json_text = match.group(0)
+                gemini_text = candidates[0]["content"]["parts"][0].get("text", "")
 
-                parsed_data = json.loads(json_text)
+                # ✅ Extract only JSON
+                match = re.search(r"\{.*\}", gemini_text, re.DOTALL)
+                if not match:
+                    print("❌ JSON not found")
+                    continue
 
-                print("PARSED:", parsed_data)
+                clean_json = match.group(0)
 
-                # 🔥 HANDLE BOTH CASES
-                if "bills" in parsed_data:
-                    bills = parsed_data["bills"]
-                elif "bill" in parsed_data:
-                    bills = [parsed_data["bill"]]
-                else:
-                    print("❌ No 'bills' key found")
-                    bills = []
+                parsed_data = json.loads(clean_json)
 
+                bills = parsed_data.get("bills", [])
                 total_bill_count += len(bills)
 
             except Exception as e:
-                print("❌ PARSE ERROR:", str(e))
-                print("FAILED TEXT:", gemini_text)
+                print("❌ Parsing Error:", str(e))
                 continue
 
             # 🔥 CREATE LINE ITEMS
@@ -488,11 +485,11 @@ FORMAT:
                 line_item = ExpenseLineItem.objects.create(
                     expense_record=expense_record,
                     attachment=attachment,
-                    description=(bill.get("additional_info") or "")[:500],
+                    description=bill.get("additional_info", "")[:500],
                     date=bill_date,
-                    category=bill.get("type") or "",
+                    category=bill.get("type", ""),
                     amount=amount,
-                    vendor=(bill.get("additional_info") or "")[:255]
+                    vendor=bill.get("additional_info", "")[:255]
                 )
 
                 created_items.append(line_item.id)
@@ -510,6 +507,7 @@ FORMAT:
             "error": "Something went wrong",
             "details": str(e)
         }, status=500)
+    
     
     
 
@@ -538,6 +536,7 @@ def approval_api(request):
             )
 
         violations = []
+        all_violations_summary = set()   # ✅ NEW
         total_amount = Decimal("0.00")
         approvers_set = set()
 
@@ -549,7 +548,6 @@ def approval_api(request):
 
         for item in line_items:
             total_amount += item.amount
-
             reasons = []
 
             # 🔥 Normalize category
@@ -586,17 +584,22 @@ def approval_api(request):
             if duplicate_exists:
                 reasons.append("Policy Violation: Duplicate bill detected")
 
-            # 🔥 SAVE TO DB (ONLY ONE FIELD)
+            # 🔥 SAVE TO DB
             if reasons:
                 item.violation_reason = " | ".join(reasons)
                 item.is_approved = False
+
+                # ✅ ADD TO RECEIPT SUMMARY
+                for r in reasons:
+                    all_violations_summary.add(r)
+
             else:
                 item.violation_reason = None
                 item.is_approved = True
 
             item.save(update_fields=["violation_reason", "is_approved"])
 
-            # Collect for response
+            # 🔹 Collect for response
             if reasons:
                 violations.append({
                     "line_item_id": item.id,
@@ -643,7 +646,12 @@ def approval_api(request):
             "status": approval_status,
             "message": final_message,
             "total_amount": float(total_amount),
+
             "violations": violations,
+
+            # ✅ NEW: ALL violations in receipt
+            "all_violations_in_receipt": list(all_violations_summary),
+
             "approvals_created": created_approvals
         }, status=status.HTTP_200_OK)
 
@@ -804,4 +812,52 @@ def update_expense_line_item(request, pk):
         return Response(
             {"error": "Line item not found"},
             status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def expense_line_items_by_record(request, expense_record_id):
+    try:
+        # Validate expense record exists
+        expense_record = ExpenseRecord.objects.get(id=expense_record_id)
+
+        # Fetch all line items
+        line_items = ExpenseLineItem.objects.filter(
+            expense_record=expense_record
+        ).select_related("expense_record")
+
+        data = []
+
+        for item in line_items:
+            data.append({
+                "id": item.id,
+                "description": item.description,
+                "amount": float(item.amount),
+                "category": item.category,
+                "date": item.date,
+                "vendor": item.vendor,
+                "violation_reason": item.violation_reason,
+                "is_approved": item.is_approved,
+                "attachment_id": item.attachment.id if item.attachment else None
+            })
+
+        return Response({
+            "success": True,
+            "expense_record_id": expense_record.id,
+            "employee_name": expense_record.employee.name,
+            "month": expense_record.month,
+            "total_items": len(data),
+            "line_items": data
+        })
+
+    except ExpenseRecord.DoesNotExist:
+        return Response(
+            {"error": "Expense record not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    except Exception as e:
+        return Response(
+            {"error": "Something went wrong", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
