@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { fetchAllApprovals } from "@/api/client";
 import type { AllApprovalsResponse, AllApprovalRow } from "@/types";
 import { DataTable } from "@/components/DataTable";
@@ -22,6 +23,7 @@ function axiosErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function AllApprovals() {
+  const navigate = useNavigate();
   const [data, setData] = useState<AllApprovalsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +97,17 @@ export default function AllApprovals() {
           {
             key: "expense_record_id",
             header: "Expense record",
-            render: (row) => row.expense_record_id,
+            render: (row) => (
+              <button
+                type="button"
+                className="font-medium text-blue-600 cursor-pointer hover:text-blue-800"
+                onClick={() =>
+                  navigate(`/all-approvals/expense-record/${row.expense_record_id}`)
+                }
+              >
+                {row.expense_record_id}
+              </button>
+            ),
           },
           {
             key: "employee_name",

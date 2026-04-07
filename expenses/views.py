@@ -301,6 +301,7 @@ def dashboard_expense_list(request):
             "date": item.date,
             "vendor": item.vendor,
             "violation_reason": item.violation_reason,
+            "is_approved": item.is_approved,
 
             # ✅ NEW FIELD
             "approval_status": item.expense_record.status
@@ -837,6 +838,7 @@ def expense_line_items_by_record(request, expense_record_id):
                 "date": item.date,
                 "vendor": item.vendor,
                 "violation_reason": item.violation_reason,
+                "approval_status": item.expense_record.status,
                 "is_approved": item.is_approved,
                 "attachment_id": item.attachment.id if item.attachment else None
             })

@@ -17,10 +17,12 @@ function axiosErrorMessage(err: unknown, fallback: string): string {
 
 type EditFormState = {
   description: string;
+  vendor: string;
 };
 
 const emptyForm = (): EditFormState => ({
   description: "",
+  vendor: "",
 });
 
 export type EditExpenseLineItemModalProps = {
@@ -43,6 +45,7 @@ export function EditExpenseLineItemModal({
     if (!item) return;
     setForm({
       description: item.description ?? "",
+      vendor: item.vendor ?? "",
     });
     setSaveError(null);
   }, [item]);
@@ -70,6 +73,7 @@ export function EditExpenseLineItemModal({
 
     const payload: ExpenseLineItemUpdatePayload = {
       description: form.description,
+      vendor: form.vendor,
     };
 
     try {
@@ -104,10 +108,20 @@ export function EditExpenseLineItemModal({
           Edit expense line item
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Line item #{item.id} — update the description.
+          Line item #{item.id} — update description and vendor.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Vendor
+            <input
+              type="text"
+              value={form.vendor}
+              onChange={(e) => setForm((f) => ({ ...f, vendor: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </label>
+
           <label className="block text-sm font-medium text-gray-700">
             Description
             <textarea

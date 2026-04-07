@@ -22,8 +22,8 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { key: "expenses", label: "Expenses", path: "/expense", icon: IconFolder },
   {
     key: "expense_list",
-    label: "Expense List",
-    path: "/expense-list",
+    label: "Expense Line Items",
+    path: "/expense-line-items",
     icon: IconReceipt,
   },
   {

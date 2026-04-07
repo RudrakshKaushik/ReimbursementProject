@@ -180,6 +180,15 @@ export type AllApprovalsResponse = {
   approvals: AllApprovalRow[];
 };
 
+export type ExpenseRecordLineItemsResponse = {
+  success: boolean;
+  expense_record_id: number;
+  employee_name: string;
+  month: string;
+  total_items: number;
+  line_items: ExpenseLineItemEntry[];
+};
+
 /** PATCH body for `update_expense_line_item` (partial) */
 export type ExpenseLineItemUpdatePayload = {
   description?: string;

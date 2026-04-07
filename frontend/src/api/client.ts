@@ -11,6 +11,7 @@ import type {
   MyApprovalsResponse,
   ApprovalRulesResponse,
   AllApprovalsResponse,
+  ExpenseRecordLineItemsResponse,
   ExpenseLineItemUpdatePayload,
 } from "../types";
 
@@ -175,6 +176,15 @@ export async function fetchApprovalRules(): Promise<ApprovalRulesResponse> {
 
 export async function fetchAllApprovals(): Promise<AllApprovalsResponse> {
   const response = await api.get<AllApprovalsResponse>("/all_approvals_api/");
+  return response.data;
+}
+
+export async function fetchExpenseLineItemsByRecord(
+  expenseRecordId: number | string,
+): Promise<ExpenseRecordLineItemsResponse> {
+  const response = await api.get<ExpenseRecordLineItemsResponse>(
+    `/expense-record/${expenseRecordId}/line-items/`,
+  );
   return response.data;
 }
 

@@ -9,11 +9,12 @@ import type { DashboardData } from "@/types";
 import Dashboard from "@/pages/Dashboard";
 import Employee from "@/pages/Employee";
 import Expense from "@/pages/Expense";
-import ExpenseList from "@/pages/ExpenseList";
+import ExpenseLineItems from "@/pages/ExpenseLineItems";
 import ExpenseRecord from "@/pages/ExpenseRecord";
 import ApprovalsHub from "@/pages/ApprovalsHub";
 import ApprovalRules from "@/pages/ApprovalRules";
 import AllApprovals from "@/pages/AllApprovals";
+import ApprovalsExpenseRecordLineItems from "@/pages/ApprovalsExpenseRecordLineItems";
 import NotFound from "@/pages/NotFound";
 
 /** `sections` labels from `dashboard_api` (expenses/views.py) that map to sidebar routes */
@@ -116,7 +117,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/employee" element={<Employee />} />
               <Route path="/expense" element={<Expense />} />
-              <Route path="/expense-list" element={<ExpenseList />} />
+              <Route path="/expense-line-items" element={<ExpenseLineItems />} />
               <Route path="/expense-records/:id" element={<ExpenseRecord />} />
               <Route path="/approvals" element={<ApprovalsHub />} />
               <Route
@@ -132,6 +133,14 @@ function App() {
                 element={
                   <RequireAdmin>
                     <AllApprovals />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/all-approvals/expense-record/:id"
+                element={
+                  <RequireAdmin>
+                    <ApprovalsExpenseRecordLineItems />
                   </RequireAdmin>
                 }
               />

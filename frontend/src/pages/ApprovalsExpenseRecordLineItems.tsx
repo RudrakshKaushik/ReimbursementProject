@@ -1,16 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import { IconPencil } from "@tabler/icons-react";
-import { fetchExpenseLineItemList } from "@/api/client";
-import type { ExpenseLineItemListResponse, ExpenseLineItemEntry } from "@/types";
+import { fetchExpenseLineItemsByRecord } from "@/api/client";
+import type { ExpenseLineItemEntry, ExpenseRecordLineItemsResponse } from "@/types";
 import { DataTable } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
-import { EditExpenseLineItemModal } from "@/components/EditExpenseLineItemModal";
-import { formatDisplayDate } from "@/utils/date";
 import {
-  WorkflowApprovalStatusBadge,
   LineItemApprovedBadge,
+  WorkflowApprovalStatusBadge,
 } from "@/components/ApprovalBadges";
+import { formatDisplayDate } from "@/utils/date";
 
 const PAGE_SIZE = 10;
 
@@ -26,7 +25,7 @@ function axiosErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-function truncate(str: string | undefined, maxLen = 60) {
+function truncate(str: string | undefined | null, maxLen = 60) {
   if (!str) return "—";
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen) + "…";
@@ -39,34 +38,36 @@ function formatAmount(amount: string | number | undefined | null) {
   return `$${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-export default function ExpenseList() {
-  const [data, setData] = useState<ExpenseLineItemListResponse | null>(null);
+export default function ApprovalsExpenseRecordLineItems() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const [data, setData] = useState<ExpenseRecordLineItemsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [editingItem, setEditingItem] = useState<ExpenseLineItemEntry | null>(null);
-
-  const reloadList = useCallback(async () => {
-    const res = await fetchExpenseLineItemList();
-    setData(res);
-  }, []);
 
   useEffect(() => {
     async function load() {
+      if (!id) {
+        setError("Expense record id is required");
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError(null);
-        await reloadList();
+        const res = await fetchExpenseLineItemsByRecord(id);
+        setData(res);
       } catch (err) {
-        setError(axiosErrorMessage(err, "Failed to load expense items"));
+        setError(axiosErrorMessage(err, "Failed to load expense line items"));
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [reloadList]);
+  }, [id]);
 
-  const items = data?.expense_list ?? [];
+  const items = data?.line_items ?? [];
   const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function ExpenseList() {
     return (
       <div className="w-full text-left">
         <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-900 md:text-4xl">
-          Expense Line Items
+          Approvals Expense Record Line Items
         </h1>
         <div className="flex min-h-[12rem] items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm">
           <p className="text-red-600">{error}</p>
@@ -93,17 +94,28 @@ export default function ExpenseList() {
     );
   }
 
-  if (!data?.expense_list) return null;
+  if (!data) return null;
 
   return (
     <div className="w-full max-w-none text-left">
-      <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-900 md:text-4xl">
-        Expense Line Items
-      </h1>
-      <p className="mb-6 text-sm text-gray-600">
-        Total items: {data.total_items}
-        {data.employee_email && ` · ${data.employee_email}`}
-      </p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-gray-900 md:text-4xl">
+            Approvals Expense Record Line Items
+          </h1>
+          <p className="text-sm text-gray-600">
+            Record #{data.expense_record_id} · {data.employee_name} · Month {data.month}
+          </p>
+          <p className="mt-1 text-sm text-gray-600">Total items: {data.total_items}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/all-approvals")}
+          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Back to all approvals
+        </button>
+      </div>
 
       <DataTable<ExpenseLineItemEntry>
         columns={[
@@ -147,70 +159,27 @@ export default function ExpenseList() {
             key: "approval_status",
             header: "Status",
             render: (item) => (
-              <WorkflowApprovalStatusBadge
-                approvalStatus={item.approval_status}
-              />
+              <WorkflowApprovalStatusBadge approvalStatus={item.approval_status} />
             ),
           },
           {
             key: "is_approved",
             header: "Approved",
-            render: (item) => (
-              <LineItemApprovedBadge isApproved={item.is_approved} />
-            ),
+            render: (item) => <LineItemApprovedBadge isApproved={item.is_approved} />,
           },
           {
             key: "violation_reason",
             header: "Violation",
             render: (item) => {
               const v = item.violation_reason?.trim();
-              if (!v) {
-                return <span className="text-gray-400">—</span>;
-              }
+              if (!v) return <span className="text-gray-400">—</span>;
               return (
-                <span
-                  className="block max-w-[220px] text-sm text-amber-900"
-                  title={v}
-                >
+                <span className="block max-w-[220px] text-sm text-amber-900" title={v}>
                   {truncate(v, 72)}
                 </span>
               );
             },
             cellClassName: "max-w-[240px]",
-          },
-          {
-            key: "attachment",
-            header: "Attachment",
-            align: "right",
-            render: (item) => {
-              const fileUrl = item.attachment?.file;
-              return fileUrl ? (
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-blue-600 hover:text-blue-800"
-                >
-                  {item.attachment?.filename ?? "View"}
-                </a>
-              ) : (
-                <span className="text-gray-400">—</span>
-              );
-            },
-          },
-          {
-            key: "actions",
-            header: "Action",
-            render: (item) => (
-              <button
-                type="button"
-                aria-label="Edit line item"
-                className="inline-flex cursor-pointer items-center justify-center rounded-md bg-blue-600 p-2 text-white shadow-sm hover:bg-blue-700"
-                onClick={() => setEditingItem(item)}
-              >
-                <IconPencil size={18} stroke={2} />
-              </button>
-            ),
           },
         ]}
         data={paginatedRows}
@@ -229,12 +198,6 @@ export default function ExpenseList() {
           />
         }
         minWidth="960px"
-      />
-
-      <EditExpenseLineItemModal
-        item={editingItem}
-        onClose={() => setEditingItem(null)}
-        onSuccess={reloadList}
       />
     </div>
   );
