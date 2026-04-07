@@ -429,7 +429,7 @@ Return ONLY valid JSON:
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
                 headers={
                     "Content-Type": "application/json",
-                    "x-goog-api-key": "AIzaSyAN65bmsu8UgH7z-9bwkF6Zn51mogk76fs"
+                    "x-goog-api-key": ""
                 },
                 data=json.dumps(request_body)
             )
