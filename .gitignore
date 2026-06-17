@@ -1,8 +1,10 @@
+# Environment variables
 .env
+frontend/.env
+
 senv
 dump.sql
 expense.sql
-frontend/.env
 frontend/node_modules/
 frontend/dist/
 venv
