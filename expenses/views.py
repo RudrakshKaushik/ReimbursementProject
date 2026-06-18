@@ -549,6 +549,7 @@ Rules:
             "details": str(e)
         }, status=500)
     
+    
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
@@ -562,11 +563,20 @@ def approval_api(request):
         )
 
     try:
-        expense_record = ExpenseRecord.objects.get(id=expense_record_id)
+        expense_record = ExpenseRecord.objects.select_related(
+            "employee", "employee__manager"
+        ).get(id=expense_record_id)
 
-        line_items = ExpenseLineItem.objects.filter(
-            expense_record=expense_record
-        )
+        employee = expense_record.employee
+        manager = employee.manager
+
+        if not manager:
+            return Response(
+                {"error": "Manager not assigned for this employee"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        line_items = ExpenseLineItem.objects.filter(expense_record=expense_record)
 
         if not line_items.exists():
             return Response(
@@ -575,46 +585,33 @@ def approval_api(request):
             )
 
         violations = []
-        all_violations_summary = set()   # ✅ NEW
+        all_violations_summary = set()
         total_amount = Decimal("0.00")
-        approvers_set = set()
 
-        # 🔹 3 month rule
         three_months_ago = timezone.now().date() - timedelta(days=90)
-
-        # 🔹 Load rules
         rules = ApprovalRule.objects.filter(is_active=True)
 
         for item in line_items:
             total_amount += item.amount
             reasons = []
 
-            # 🔥 Normalize category
             item_category = (item.category or "").strip().lower()
 
-            matched_rule = rules.filter(
-                name__iexact=item_category
-            ).first()
+            matched_rule = rules.filter(name__iexact=item_category).first()
 
-            # ❌ No rule
             if not matched_rule:
                 reasons.append("No matching approval rule")
             else:
-                approvers_set.add(matched_rule.approver)
-
-                # ✅ Rule 1: Bill older than 3 months
                 if item.date and item.date < three_months_ago:
                     reasons.append("Policy Violation: Bill older than 3 months")
 
-                # ✅ Rule 2: Amount exceeds
                 if item.amount > matched_rule.max_amount:
                     reasons.append(
                         f"Policy Violation: Amount exceeds limit ({matched_rule.max_amount})"
                     )
 
-            # ✅ Rule 3: Duplicate bill
             duplicate_exists = ExpenseLineItem.objects.filter(
-                expense_record__employee=expense_record.employee,
+                expense_record__employee=employee,
                 amount=item.amount,
                 date=item.date,
                 vendor=item.vendor
@@ -623,22 +620,18 @@ def approval_api(request):
             if duplicate_exists:
                 reasons.append("Policy Violation: Duplicate bill detected")
 
-            # 🔥 SAVE TO DB
             if reasons:
                 item.violation_reason = " | ".join(reasons)
                 item.is_approved = False
 
-                # ✅ ADD TO RECEIPT SUMMARY
-                for r in reasons:
-                    all_violations_summary.add(r)
-
+                for reason in reasons:
+                    all_violations_summary.add(reason)
             else:
                 item.violation_reason = None
                 item.is_approved = True
 
             item.save(update_fields=["violation_reason", "is_approved"])
 
-            # 🔹 Collect for response
             if reasons:
                 violations.append({
                     "line_item_id": item.id,
@@ -646,13 +639,25 @@ def approval_api(request):
                     "reason": item.violation_reason
                 })
 
-        # 🔥 FINAL DECISION
         if violations:
-            approval_status = "ADMIN PENDING"
+            approval_status = "PENDING"
             final_message = "Sent to manager for approval"
 
             expense_record.status = ExpenseRecord.STATUS_PENDING
-            expense_record.current_approver = expense_record.employee.manager
+            expense_record.current_approver = manager
+
+            approval, created = Approval.objects.get_or_create(
+                expense_record=expense_record,
+                approver=manager
+            )
+
+            approval.status = approval_status
+            approval.comments = final_message
+            approval.approved_at = None
+            approval.save()
+
+            created_approvals = [approval.id]
+
         else:
             approval_status = "APPROVED"
             final_message = "Approved by system"
@@ -660,37 +665,21 @@ def approval_api(request):
             expense_record.status = ExpenseRecord.STATUS_APPROVED
             expense_record.current_approver = None
 
-        # 🔥 Create approvals
-        created_approvals = []
+            created_approvals = []
 
-        for approver in approvers_set:
-            approval, created = Approval.objects.get_or_create(
-                expense_record=expense_record,
-                approver=approver
-            )
-
-            approval.status = approval_status
-            approval.comments = final_message
-            approval.approved_at = timezone.now()
-            approval.save()
-
-            created_approvals.append(approval.id)
-
-        # 🔹 Save record
         expense_record.total_amount = total_amount
         expense_record.save()
 
         return Response({
             "expense_record_id": expense_record.id,
+            "employee_name": employee.name,
+            "manager_id": manager.id,
+            "manager_name": manager.name,
             "status": approval_status,
             "message": final_message,
             "total_amount": float(total_amount),
-
             "violations": violations,
-
-            # ✅ NEW: ALL violations in receipt
             "all_violations_in_receipt": list(all_violations_summary),
-
             "approvals_created": created_approvals
         }, status=status.HTTP_200_OK)
 
