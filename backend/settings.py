@@ -152,8 +152,20 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
 # ✅ GEMINI
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# ✅ CELERY
-CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+# ✅ CELERY (eager mode = no Redis/worker; runs tasks inline in the web process)
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL",
+    "memory://" if CELERY_TASK_ALWAYS_EAGER else "redis://127.0.0.1:6379/0",
+)
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Base URL for internal API calls (e.g. Gemini trigger after email ingest)
+RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+API_BASE_URL = os.getenv(
+    "API_BASE_URL",
+    f"https://{RENDER_HOST}" if RENDER_HOST else "http://127.0.0.1:8000",
+)

@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
+import os
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
@@ -40,6 +41,16 @@ from .serializers import (
     ExpenseLineItemSerializer,
     ExpenseRecordSerializer,
 )
+from .tasks import fetch_emails_task
+
+
+def _fetch_emails_if_enabled():
+    if os.getenv("FETCH_EMAILS_ENABLED", "true").lower() != "true":
+        return {"status": "skipped"}
+    try:
+        return fetch_emails_task.apply().get()
+    except Exception as exc:
+        return {"status": "failed", "error": str(exc)}
 
 
 # -----------------------------
@@ -167,6 +178,8 @@ def login_api(request):
     token, _ = Token.objects.get_or_create(user=user)
     django_login(request, user)
 
+    email_fetch = _fetch_emails_if_enabled()
+
     return Response({
         "token": token.key,
         "user_id": user.id,
@@ -174,7 +187,8 @@ def login_api(request):
         "role": role,  # ✅ added role here
         "success": True,
         "message": "Login successful",
-        "redirect_url": "/dashboard"
+        "redirect_url": "/dashboard",
+        "email_fetch": email_fetch,
     }, status=status.HTTP_200_OK)
    
 
@@ -194,6 +208,8 @@ def dashboard_api(request):
     """
 
     user = request.user
+
+    email_fetch = _fetch_emails_if_enabled()
 
     try:
         # Get employee using logged-in user's email
@@ -217,6 +233,7 @@ def dashboard_api(request):
         "employee": EmployeeSerializer(employee).data,
         "expenses": ExpenseRecordSerializer(expenses, many=True).data,
         "expense_list": ExpenseLineItemSerializer(expense_list, many=True).data,
+        "email_fetch": email_fetch,
         "sections": [
             "Approval Rules",
             "Attachments",

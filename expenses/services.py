@@ -1,8 +1,11 @@
 from datetime import date
-from django.utils import timezone
-from django.core.files.base import ContentFile
-from .models import EmailMessage, Attachment, Employee, ExpenseRecord
+
 import requests
+from django.conf import settings
+from django.core.files.base import ContentFile
+from django.utils import timezone
+
+from .models import Attachment, EmailMessage, Employee, ExpenseRecord
 
 
 def process_email(message_id, subject, sender_email, body, attachments, raw_payload=None):
@@ -73,12 +76,12 @@ def process_email(message_id, subject, sender_email, body, attachments, raw_payl
         )
 
         requests.post(
-            "http://127.0.0.1:8000/api/gemini/",
+            f"{settings.API_BASE_URL.rstrip('/')}/api/gemini/",
             json={
                 "expense_record_id": expense_record.id,
-                "attachment_ids": attachment_ids
+                "attachment_ids": attachment_ids,
             },
-            timeout=10
+            timeout=30,
         )
 
     except Exception as e:
