@@ -356,7 +356,13 @@ from .models import ExpenseRecord, Attachment, ExpenseLineItem
 @permission_classes([AllowAny])
 def gemini_api(request):
     try:
+        import os
         import re
+        import base64
+        import json
+        import requests
+        from decimal import Decimal
+        from datetime import datetime, date
 
         data = request.data
 
@@ -368,12 +374,20 @@ def gemini_api(request):
         print("attachment_ids:", attachment_ids)
 
         if not expense_record_id or not attachment_ids:
-            return Response(
-                {"error": "Missing required fields"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Missing required fields"}, status=400)
 
         expense_record = ExpenseRecord.objects.get(id=expense_record_id)
+
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+        print("GEMINI_API_KEY exists:", bool(GEMINI_API_KEY))
+        print("GEMINI_API_KEY first 10 chars:", GEMINI_API_KEY[:10] if GEMINI_API_KEY else "NOT FOUND")
+
+        if not GEMINI_API_KEY:
+            return Response(
+                {"error": "GEMINI_API_KEY not found in environment"},
+                status=500
+            )
 
         created_items = []
         total_bill_count = 0
@@ -382,6 +396,7 @@ def gemini_api(request):
 You are an expert expense document analyzer.
 
 Return ONLY valid JSON:
+
 {
   "bills": [
     {
@@ -389,24 +404,32 @@ Return ONLY valid JSON:
       "amount": null,
       "currency": "",
       "bill_date": null,
+      "vendor": "",
       "additional_info": ""
     }
   ]
 }
+
+Rules:
+- type must be one of: food, hotel, flight_ticket, train_ticket, car_rental, fuel, gas, parking, office_supplies, medical, courier, telecom, training, relocation, wfh, miscellaneous
+- amount must be total payable amount only
+- bill_date must be YYYY-MM-DD
+- vendor must be only merchant/company name, max 1-5 words
+- additional_info should contain itemized/important receipt details
 """
 
         for attachment_id in attachment_ids:
-
             try:
                 attachment = Attachment.objects.get(id=attachment_id)
             except Attachment.DoesNotExist:
+                print("❌ Attachment not found:", attachment_id)
                 continue
 
-            # 🔥 Base64
-            base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
+            if not attachment.file_data:
+                print("❌ Empty file_data for attachment:", attachment_id)
+                continue
 
-            # 🔥 MIME TYPE
-            file_name = getattr(attachment, "file_name", "file.jpg")
+            file_name = getattr(attachment, "filename", None) or getattr(attachment, "file_name", None) or "file.jpg"
             ext = file_name.split(".")[-1].lower() if "." in file_name else ""
 
             mime_map = {
@@ -414,15 +437,14 @@ Return ONLY valid JSON:
                 "jpg": "image/jpeg",
                 "jpeg": "image/jpeg",
                 "png": "image/png",
-                "doc": "application/msword",
-                "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "xls": "application/vnd.ms-excel",
-                "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "webp": "image/webp",
             }
 
-            mime_type = mime_map.get(ext, "application/octet-stream")
+            mime_type = mime_map.get(ext, "image/jpeg")
 
-            print("📄 Processing:", file_name, "| MIME:", mime_type)
+            print(f"📄 Processing: {file_name} | MIME: {mime_type}")
+
+            base64_data = base64.b64encode(attachment.file_data).decode("utf-8")
 
             request_body = {
                 "contents": [
@@ -443,23 +465,19 @@ Return ONLY valid JSON:
             }
 
             response = requests.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-goog-api-key": ""
-                },
-                data=json.dumps(request_body)
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
+                headers={"Content-Type": "application/json"},
+                json=request_body,
+                timeout=60
             )
 
             response_json = response.json()
             print("📥 Gemini Raw Response:", response_json)
 
-            # ✅ HANDLE API ERROR
             if "error" in response_json:
-                print("❌ Gemini API Error:", response_json["error"]["message"])
+                print("❌ Gemini API Error:", response_json["error"].get("message"))
                 continue
 
-            # 🔥 FIXED PARSING
             try:
                 candidates = response_json.get("candidates", [])
                 if not candidates:
@@ -467,66 +485,69 @@ Return ONLY valid JSON:
                     continue
 
                 gemini_text = candidates[0]["content"]["parts"][0].get("text", "")
+                print("📝 Gemini Text:", gemini_text)
 
-                # ✅ Extract only JSON
                 match = re.search(r"\{.*\}", gemini_text, re.DOTALL)
                 if not match:
-                    print("❌ JSON not found")
+                    print("❌ No JSON found in Gemini response")
                     continue
 
-                clean_json = match.group(0)
-
-                parsed_data = json.loads(clean_json)
-
+                parsed_data = json.loads(match.group(0))
                 bills = parsed_data.get("bills", [])
+
+                print("✅ Bills found:", len(bills))
                 total_bill_count += len(bills)
 
             except Exception as e:
-                print("❌ Parsing Error:", str(e))
+                print("❌ JSON Parse Error:", str(e))
                 continue
 
-            # 🔥 CREATE LINE ITEMS
             for bill in bills:
-
                 try:
-                    bill_date = datetime.strptime(
-                        bill.get("bill_date"), "%Y-%m-%d"
-                    ).date() if bill.get("bill_date") else date.today()
-                except:
+                    bill_date = (
+                        datetime.strptime(bill.get("bill_date"), "%Y-%m-%d").date()
+                        if bill.get("bill_date")
+                        else date.today()
+                    )
+                except Exception:
                     bill_date = date.today()
 
                 try:
-                    amount = Decimal(str(bill.get("amount"))) if bill.get("amount") else Decimal("0.00")
-                except:
+                    amount = (
+                        Decimal(str(bill.get("amount")))
+                        if bill.get("amount") not in [None, ""]
+                        else Decimal("0.00")
+                    )
+                except Exception:
                     amount = Decimal("0.00")
 
                 line_item = ExpenseLineItem.objects.create(
                     expense_record=expense_record,
                     attachment=attachment,
-                    description=bill.get("additional_info", "")[:500],
+                    description=str(bill.get("additional_info", ""))[:500],
                     date=bill_date,
-                    category=bill.get("type", ""),
+                    category=str(bill.get("type", "miscellaneous")),
                     amount=amount,
-                    vendor=bill.get("additional_info", "")[:255]
+                    vendor=str(bill.get("vendor", ""))[:255],
                 )
 
                 created_items.append(line_item.id)
+                print("✅ Line item created:", line_item.id)
 
         return Response({
             "total_bill_count": total_bill_count,
             "line_items_created": created_items
-        }, status=status.HTTP_200_OK)
+        }, status=200)
 
     except ExpenseRecord.DoesNotExist:
         return Response({"error": "ExpenseRecord not found"}, status=404)
 
     except Exception as e:
+        print("❌ Main Error:", str(e))
         return Response({
             "error": "Something went wrong",
             "details": str(e)
         }, status=500)
-    
-    
     
 
 @api_view(["POST"])
